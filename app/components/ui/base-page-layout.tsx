@@ -172,31 +172,24 @@ export default function BasePageLayout() {
 
         document.addEventListener('click', langDropDownOutsideClickListener)
 
-        // Only attempt to use Firebase auth if the Firebase client was initialized
+        // Use unified auth wrapper (real Firebase or mock) to subscribe to auth state
         let unsubscribe: any = () => {}
 
-        if (FirebaseAuth) {
-            unsubscribe = onAuthStateChanged(FirebaseAuth, user => {
-                if (user) {
-                    setCurrentUser(user)
+        unsubscribe = subscribeAuth((user: any) => {
+            if (user) {
+                setCurrentUser(user)
 
-                    consoleLog('Authenticated user:', user)
-                } else {
-                    signInAnonymously(FirebaseAuth).catch(error => {
-                        consoleError('Error occurred when signing into Firebase:', error)
+                consoleLog('Authenticated user:', user)
+            } else {
+                signInAnonymously().catch((error: any) => {
+                    consoleError('Error occurred when signing into Firebase:', error)
 
-                        setCurrentUser(-1)
-                    })
-                }
+                    setCurrentUser(-1)
+                })
+            }
 
-                document.removeEventListener('click', langDropDownOutsideClickListener)
-            })
-        } else {
-            // Firebase is not available in the current environment. Continue without auth.
-            consoleError('Firebase is not initialized. Authentication is disabled.')
-            setCurrentUser(-1)
             document.removeEventListener('click', langDropDownOutsideClickListener)
-        }
+        })
 
         return () => {
             try {
