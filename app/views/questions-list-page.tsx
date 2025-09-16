@@ -656,20 +656,22 @@ export default function QuestionsListPage() {
                   {currentPage > 1 && (
                     <a
                       href="#"
-                      className="btn-theme mr-auto"
+                      className="btn-theme"
                       onClick={(e) => onPageSubmitted(e, "b", false)}
                     >
-                      <i className="fa-solid fa-angles-left"></i> &nbsp; Previous
-                      Page
+                      <i className="fa-solid fa-angles-left"></i> &nbsp; Back
                     </a>
                   )}
+
+                  <span className="resume-code">{`Resume code: ${((currentUser?.uid || '').slice(0,6) || '------').toUpperCase()}`}</span>
+
                   {currentPage < settings.totalPages && (
                     <a
                       href="#"
-                      className="btn-theme ml-auto"
+                      className="btn-theme"
                       onClick={onPageSubmitted}
                     >
-                      Next Page &nbsp;{" "}
+                      Next &nbsp;{" "}
                       <i className="fa-solid fa-angles-right"></i>
                     </a>
                   )}
