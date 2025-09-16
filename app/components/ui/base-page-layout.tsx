@@ -1,4 +1,3 @@
-
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Outlet } from "react-router";
 import { APP_TITLE, LANGUAGES_AVAILABLE } from '~/constant';
@@ -126,8 +125,6 @@ export default function BasePageLayout() {
                 langObj = fr
             }
 
-            // consoleLog('langObj:', langObj)
-
             if (typeof(langObj[code]) === 'undefined') {
                 text = code
             } else {
@@ -176,23 +173,39 @@ export default function BasePageLayout() {
 
         document.addEventListener('click', langDropDownOutsideClickListener)
 
-        const unsubscribe = onAuthStateChanged(FirebaseAuth, user => {
-            if (user) {
-                setCurrentUser(user)
+        // Only attempt to use Firebase auth if the Firebase client was initialized
+        let unsubscribe: any = () => {}
 
-                consoleLog('Authenticated user:', user)
-            } else {
-                signInAnonymously(FirebaseAuth).catch(error => {
-                    consoleError('Error occurred when signing into Firebase:', error)
+        if (FirebaseAuth) {
+            unsubscribe = onAuthStateChanged(FirebaseAuth, user => {
+                if (user) {
+                    setCurrentUser(user)
 
-                    setCurrentUser(-1)
-                })
-            }
+                    consoleLog('Authenticated user:', user)
+                } else {
+                    signInAnonymously(FirebaseAuth).catch(error => {
+                        consoleError('Error occurred when signing into Firebase:', error)
 
+                        setCurrentUser(-1)
+                    })
+                }
+
+                document.removeEventListener('click', langDropDownOutsideClickListener)
+            })
+        } else {
+            // Firebase is not available in the current environment. Continue without auth.
+            consoleError('Firebase is not initialized. Authentication is disabled.')
+            setCurrentUser(-1)
             document.removeEventListener('click', langDropDownOutsideClickListener)
-        })
+        }
 
-        return unsubscribe
+        return () => {
+            try {
+                if (typeof unsubscribe === 'function') unsubscribe()
+            } catch(e) {
+                // ignore
+            }
+        }
     }, [])
 
     useEffect(() => {
@@ -264,7 +277,6 @@ export default function BasePageLayout() {
 
             <main className={"bd-docs is-fullwidth " + (pageType === 'auth' ? 'auth-page' : '')}>
                 <div className="container">
-                    {/* Render the Page component */}
                     {
                         currentUser && currentUser !== -1 &&
                         <Outlet context={{
