@@ -2,8 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Outlet } from "react-router";
 import { APP_TITLE, LANGUAGES_AVAILABLE } from '~/constant';
 
-import { FirebaseAuth } from "../../firebaseConfig";
-import { onAuthStateChanged, signInAnonymously } from "firebase/auth"
+import { subscribeAuth, signInAnonymously } from "~/lib/authWrapper"
 import { consoleError, consoleLog } from "~/lib/utils";
 import Toast from "./toast";
 
