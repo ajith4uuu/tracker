@@ -216,24 +216,25 @@ export default function BasePageLayout() {
                 isNavbarVisible && !isLoading &&
                 <header ref={headerRef}>
                     <img src="/assets/images/logo.png" alt={APP_TITLE + " Logo"} />
-                    {
-                        LANGUAGES_AVAILABLE.length > 0 &&
-                        <>
+                    <div className="header-actions">
+                        <button className="btn-theme is-light" onClick={() => {
+                            const code = prompt('Enter your resume code');
+                            if (code) {
+                                // TODO: implement resume-by-code navigation
+                                console.log('Resume with code:', code);
+                            }
+                        }}>Resume</button>
+                        {LANGUAGES_AVAILABLE.length > 0 && (
                             <div className="lang-dropdown" ref={langContainerRef}>
                                 <button className="lang-switch" onClick={onLangSwitchClicked}>{currentLangText}</button>
-
                                 <div className={"lang-dropdown-menu " + (isLangDropdownActive ? 'show' : '')}>
-                                    {
-                                        LANGUAGES_AVAILABLE.map((lang, i) => {
-                                            return (
-                                                <a key={"lang-" + i} className={(lang.code == currentLang ? "is-selected" : "")} onClick={e => onChooseLanguageClicked(e, lang.code)}>{lang.label}</a>
-                                            )
-                                        })
-                                    }
+                                    {LANGUAGES_AVAILABLE.map((lang, i) => (
+                                        <a key={"lang-" + i} className={(lang.code == currentLang ? "is-selected" : "")} onClick={e => onChooseLanguageClicked(e, lang.code)}>{lang.label}</a>
+                                    ))}
                                 </div>
                             </div>
-                        </>
-                    }
+                        )}
+                    </div>
                 </header>
             }
 

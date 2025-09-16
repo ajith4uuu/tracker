@@ -20,6 +20,7 @@ import { consoleError, consoleLog, validateQuestionField } from "~/lib/utils";
 
 import type { AlertProps } from "~/components/ui/alert"
 import Alert from "~/components/ui/alert"
+import DocAIUploader from "~/components/ui/docai-uploader";
 
 export default function QuestionsListPage() {
   const { setPageTitle, currentLang, setCurrentLang, isLoading, toggleLoading, currentUser, errorToast, successToast, setPageType, scrollToTop, scrollToElement, toggleNavbar, toggleFooter } = useOutletContext();
@@ -631,19 +632,22 @@ export default function QuestionsListPage() {
                       return null;
                     }
 
-                    // if (['calc'].includes(question.type)) {
-                    //   return null;
-                    // }
+                    const isEmailField = (question.name || '').toLowerCase() === 'pt_email';
 
                     return (
-                      <QuestionField
-                        key={question.id}
-                        question={question}
-                        value={((responses[question.id] ?? {}).value ?? null)}
-                        questionIndex={index}
-                        setQuestionValue={onQuestionValueChanged}
-                        language={settings.language}
-                      />
+                      <>
+                        {isEmailField && (
+                          <DocAIUploader />
+                        )}
+                        <QuestionField
+                          key={question.id}
+                          question={question}
+                          value={((responses[question.id] ?? {}).value ?? null)}
+                          questionIndex={index}
+                          setQuestionValue={onQuestionValueChanged}
+                          language={settings.language}
+                        />
+                      </>
                     );
                   })}
                 </div>
