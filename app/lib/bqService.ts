@@ -4,7 +4,9 @@ import { getFirestoreBatch, getFirestoreDoc, questionsCollectionID, sanitizeObj,
 import { consoleError, consoleLog } from './utils';
 
 function bqBackendURL(path: string) {
-    return import.meta.env.VITE_BQ_BACKEND_API_ENDPOINT.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
+    const base = (import.meta as any)?.env?.VITE_BQ_BACKEND_API_ENDPOINT;
+    const origin = base && String(base).trim().length ? String(base) : '/api/bq';
+    return origin.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
 }
 
 async function requestBQBackend(path: string, method: string, reqData: any, respType: AxiosResponseType = 'json') {
