@@ -1,0 +1,68 @@
+.auth-page {
+    padding: 0;
+    background: linear-gradient(135deg, #f8bbd0, #ec407a); /* pink gradient */
+}
+
+.auth-page > .container {
+    font-family: 'Montserrat', sans-serif;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    text-align: center;
+    padding: 20px;
+}
+.auth-page h1 {
+    font-size: 2.3rem;
+    margin-bottom: 15px;
+    animation: slideDown 1.2s ease-in-out;
+}
+.auth-page p {
+    font-size: 1.15rem;
+    margin-bottom: 20px;
+    max-width: 700px;
+    line-height: 1.6;
+    animation: fadeIn 1.6s ease-in-out;
+}
+.logo {
+    max-width: 160px;
+    margin-bottom: 20px;
+    animation: fadeIn 1.2s ease-in-out;
+}
+.highlight {
+    font-weight: 600;
+    color: #ffe4f1; /* softer light-pink for emphasis */
+}
+.btn {
+    background: #ffffff;
+    color: #ec407a;
+    padding: 15px 35px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    font-weight: 600;
+    text-transform: uppercase;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+}
+.btn:hover {
+    background: #fce4ec;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+}
+footer {
+    margin-top: 40px;
+    font-size: 0.9rem;
+    opacity: 0.85;
+}
+@keyframes fadeIn {
+    from {opacity: 0;}
+    to {opacity: 1;}
+}
+@keyframes slideDown {
+    from {opacity: 0; transform: translateY(-30px);}
+    to {opacity: 1; transform: translateY(0);}
+}

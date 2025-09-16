@@ -1,0 +1,91 @@
+.range-slider {
+  width: 100%;
+  height: calc(var(--bulma-control-height) / 2);
+  position: relative;
+  background: #f5f5f5;
+  box-shadow: inset 0px 0px 0.2em 0.4em var(--bulma-border-weak);
+  border-radius: 1em;
+  margin-top: 2em;
+}
+
+.range-slider > .range-slider__indicator {
+  position: absolute;
+  left: 0;
+  top: calc(var(--bulma-control-height) / 2);
+  font-size: 0.8em;
+}
+
+.range-slider > .range-slider__indicator[data-ind-type="max"] {
+  left: unset;
+  right: 0;
+}
+
+.range-slider > input[type="range"] {
+  width: 100%;
+  appearance: none;
+  height: 100%;
+  margin: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  cursor: grab;
+  outline: none;
+  background: none;
+}
+
+.range-slider > input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: calc(var(--bulma-control-height) / 1.5);
+  height: calc(var(--bulma-control-height) / 1.5);
+  border-radius: 50%;
+  background: var(--bulma-link);
+  box-shadow: var(--bulma-card-shadow);
+}
+
+.range-slider > input[type="range"]::-moz-range-thumb {
+  appearance: none;
+  width: calc(var(--bulma-control-height) / 1.5);
+  height: calc(var(--bulma-control-height) / 1.5);
+  border-radius: 50%;
+  background: var(--bulma-link);
+  box-shadow: var(--bulma-card-shadow);
+}
+
+.range-slider > input[type="range"]::-ms-thumb {
+  appearance: none;
+  width: calc(var(--bulma-control-height) / 1.5);
+  height: calc(var(--bulma-control-height) / 1.5);
+  border-radius: 50%;
+  background: var(--bulma-link);
+  box-shadow: var(--bulma-card-shadow);
+}
+
+.range-slider > .range-slider__progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: var(#eee);
+  pointer-events: none;
+  z-index: -1;
+  border-radius: var(--progress-radius);
+}
+
+.range-slider > .range-slider__progress::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--bulma-link-text);
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.range-slider > .range-slider__output {
+  position: absolute;
+  top: -2em;
+  font-size: 0.9em;
+}
