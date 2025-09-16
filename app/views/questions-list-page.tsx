@@ -59,7 +59,8 @@ export default function QuestionsListPage() {
     let pastResponses: any = {};
     let visibleQuestions = 0;
 
-    await new Promise(async (resolve) => {
+    try {
+      await new Promise(async (resolve) => {
       // consoleLog('page:',page)
 
       let newSettings: any = await fetchUserSettingsFromFirestore(currentUser.uid)
@@ -77,7 +78,11 @@ export default function QuestionsListPage() {
         if (!(firestoreQuestions && firestoreQuestions.length > 0)) {
           consoleLog('Uploading questions into Firestore from BigQuery...');
 
-          await BQLoadQuestionsIntoFirestore(currentUser.uid);
+          try {
+            await BQLoadQuestionsIntoFirestore(currentUser.uid);
+          } catch (error) {
+            consoleError('Failed to load questions from BigQuery into Firestore:', error);
+          }
 
           firestoreQuestions = await fetchAllQuestionsFromFirestore(currentUser.uid);
 
@@ -219,6 +224,12 @@ export default function QuestionsListPage() {
 
       resolve("Questions fetched.");
     });
+    } catch (error) {
+      consoleError('Error fetching questions data:', error)
+      toggleLoading(false)
+      errorToast('Unable to load questions. Please refresh and try again.')
+      return
+    }
 
     /* let resumeData = null;
     try {
