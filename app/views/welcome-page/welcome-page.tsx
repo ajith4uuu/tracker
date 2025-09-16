@@ -48,23 +48,17 @@ export default function WelcomePage() {
 
     return (
         <>
-            <h1><span dangerouslySetInnerHTML={{ __html: lang('welcome') }} /> {APP_TITLE}</h1>
+            <div className="welcome-card">
+                <h1><span dangerouslySetInnerHTML={{ __html: lang('welcome') }} /> {APP_TITLE}</h1>
+                <p dangerouslySetInnerHTML={{ __html: lang('welcome_para_1') }}></p>
+                <p><span dangerouslySetInnerHTML={{ __html: lang('welcome_para_2') }} /></p>
+                <p><span dangerouslySetInnerHTML={{ __html: lang('welcome_para_3') }} /></p>
 
-            <p dangerouslySetInnerHTML={{ __html: lang('welcome_para_1') }}></p>
-
-            <p><span dangerouslySetInnerHTML={{ __html: lang('welcome_para_2') }} /></p>
-
-            <p><span dangerouslySetInnerHTML={{ __html: lang('welcome_para_3') }} /></p>
-
-            <div className="columns mt-5">
-                <div className="column is-narrow">
-
-                    <div className="card is-danger">
+                <div className="scenario-grid">
+                    <div className="scenario-card card is-danger">
                         <div className="card-content">
                             <div className="content">
-                                <h3>
-                                    <i className="fa-solid fa-plus-circle"></i>&nbsp;<span dangerouslySetInnerHTML={{ __html: lang('fresh_survey') }} />
-                                </h3>
+                                <h3><i className="fa-solid fa-plus-circle"></i><span dangerouslySetInnerHTML={{ __html: lang('fresh_survey') }} /></h3>
                                 <p dangerouslySetInnerHTML={{ __html: lang('fresh_survey_desc') }} />
                                 <button className="button is-link is-ghost" onClick={onBtnFreshSurveyClicked}>
                                     <span dangerouslySetInnerHTML={{ __html: lang('fresh_survey_start_btn') }} />&nbsp;<i className="fa-solid fa-angles-right"></i>
@@ -73,12 +67,10 @@ export default function WelcomePage() {
                         </div>
                     </div>
 
-                    <div className="card is-primary">
+                    <div className="scenario-card card is-primary">
                         <div className="card-content">
                             <div className="content">
-                                <h3>
-                                    <i className="fa-solid fa-circle-play"></i>&nbsp;<span dangerouslySetInnerHTML={{ __html: lang('resume_prev_survey') }} />
-                                </h3>
+                                <h3><i className="fa-solid fa-circle-play"></i><span dangerouslySetInnerHTML={{ __html: lang('resume_prev_survey') }} /></h3>
                                 <p dangerouslySetInnerHTML={{ __html: lang('resume_prev_survey_desc') }} />
                                 <button className="button is-link is-ghost" onClick={onBtnResumeSurveyClicked}>
                                     <span dangerouslySetInnerHTML={{ __html: lang('resume_prev_survey_start_btn') }} />&nbsp;<i className="fa-solid fa-angles-right"></i>
@@ -87,12 +79,10 @@ export default function WelcomePage() {
                         </div>
                     </div>
 
-                    <div className="card is-link">
+                    <div className="scenario-card card is-link">
                         <div className="card-content">
                             <div className="content">
-                                <h3>
-                                    <i className="fa-solid fa-clipboard-list"></i>&nbsp;<span dangerouslySetInnerHTML={{ __html: lang('post_2_mont_survey') }} />
-                                </h3>
+                                <h3><i className="fa-solid fa-clipboard-list"></i><span dangerouslySetInnerHTML={{ __html: lang('post_2_mont_survey') }} /></h3>
                                 <p dangerouslySetInnerHTML={{ __html: lang('post_2_mont_survey_desc') }} />
                                 <button className="button is-link is-ghost">
                                     <span dangerouslySetInnerHTML={{ __html: lang('post_2_mont_survey_start_btn') }} />&nbsp;<i className="fa-solid fa-angles-right"></i>
@@ -100,7 +90,6 @@ export default function WelcomePage() {
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
 
