@@ -6,7 +6,7 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "prod": "env-cmd -f .env.production react-router dev",
-    "start": "react-router-serve ./build/server/index.js",
+    "start": "npm run build && react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "uploadQuestions:local": "env-cmd -f .env.local node uploadQuestions.cjs",
     "uploadQuestions:prod": "env-cmd -f .env.production node uploadQuestions.cjs"
