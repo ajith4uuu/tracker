@@ -281,7 +281,8 @@ export function QuestionField(
                                         <textarea
                                             className={"textarea " + (question.error ? 'is-danger' : '')}
                                             id={"question-" + question.id}
-                                            onChange={onFieldChanged}>{value ?? ''}</textarea>
+                                            value={value ?? ''}
+                                            onChange={onFieldChanged} />
                                     </>
                                 }
 
