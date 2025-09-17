@@ -371,6 +371,14 @@ export default function QuestionsListPage() {
       try {
         consoleLog('evaluating with ctx (post-replace):', statement, ctx)
 
+        // Basic safety check: only allow a restricted set of characters after replacement.
+        // This prevents accidental invalid JS from reaching new Function and throwing SyntaxError.
+        const safePattern = /^[\sA-Za-z0-9_\[\]\'\"\(\)\.,:;<>!=&|+\-/*%?]+$/;
+        if (!safePattern.test(statement)) {
+          consoleError('Unsafe displayCondition detected, skipping eval:', statement);
+          return false;
+        }
+
         // eslint-disable-next-line no-new-func
         const fn = new Function('ctx', `with (ctx) { return (${statement}); }`);
         const result = fn(ctx);
@@ -383,7 +391,7 @@ export default function QuestionsListPage() {
           return false
         }
       } catch(error) {
-        consoleError('Error when evaluating the displayCondition:', error)
+        consoleError('Error when evaluating the displayCondition:', error, 'statement:', statement)
 
         return false
       }
