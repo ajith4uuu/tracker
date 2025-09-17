@@ -672,78 +672,73 @@ export default function QuestionsListPage() {
       <div className="columns">
         <div className="column">
           <div className="section-header">{`Page ${currentPage}`}</div>
+          <div className="section-subheader"></div>
 
           <div className="section-content">
             {!settings.surveyCompleted && currPageQuestions && currPageQuestions.length > 0 && (
               <>
-                {/* <div className="notification is-info is-light">
-                  <strong className="mb-2">Note:</strong>
-                  <ul>
-                    <li>
-                      (<span className="required-field-marker">*</span>) marked
-                      fields are mandatory.
-                    </li>
-                  </ul>
-                </div> */}
+                <div className="page-content-card card">
+                  <div className="card-content">
+                    <div className="questions-list">
+                      {currPageQuestions.map((question, index) => {
+                        if (!isQuestionVisible(question)) {
+                          return null;
+                        }
 
-                <div className="questions-list">
-                  {currPageQuestions.map((question, index) => {
-                    if (!isQuestionVisible(question)) {
-                      return null;
-                    }
+                        const isEmailField = (question.name || '').toLowerCase() === 'pt_email';
 
-                    const isEmailField = (question.name || '').toLowerCase() === 'pt_email';
+                        return (
+                          <div key={`${question.id ?? 'q'}-${index}`} className="question-row">
+                            {isEmailField && (
+                              <DocAIUploader key={`docai-${question.id ?? index}`} />
+                            )}
+                            <QuestionField
+                              key={`qf-${question.id ?? index}`}
+                              question={question}
+                              value={((responses[question.id] ?? {}).value ?? null)}
+                              questionIndex={index}
+                              setQuestionValue={onQuestionValueChanged}
+                              language={settings.language}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                    return (
-                      <div key={`${question.id ?? 'q'}-${index}`} className="question-row">
-                        {isEmailField && (
-                          <DocAIUploader key={`docai-${question.id ?? index}`} />
-                        )}
-                        <QuestionField
-                          key={`qf-${question.id ?? index}`}
-                          question={question}
-                          value={((responses[question.id] ?? {}).value ?? null)}
-                          questionIndex={index}
-                          setQuestionValue={onQuestionValueChanged}
-                          language={settings.language}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                    <div className="questions-actions py-5">
+                      {currentPage > 1 && (
+                        <a
+                          href="#"
+                          className="btn-theme"
+                          onClick={(e) => onPageSubmitted(e, "b", false)}
+                        >
+                          <i className="fa-solid fa-angles-left"></i> &nbsp; Back
+                        </a>
+                      )}
 
-                <div className="questions-actions py-5">
-                  {currentPage > 1 && (
-                    <a
-                      href="#"
-                      className="btn-theme"
-                      onClick={(e) => onPageSubmitted(e, "b", false)}
-                    >
-                      <i className="fa-solid fa-angles-left"></i> &nbsp; Back
-                    </a>
-                  )}
+                      <span className="resume-code">{`Resume code: ${((currentUser?.uid || '').slice(0,6) || '------').toUpperCase()}`}</span>
 
-                  <span className="resume-code">{`Resume code: ${((currentUser?.uid || '').slice(0,6) || '------').toUpperCase()}`}</span>
-
-                  {currentPage < settings.totalPages && (
-                    <a
-                      href="#"
-                      className="btn-theme"
-                      onClick={onPageSubmitted}
-                    >
-                      Next &nbsp;{" "}
-                      <i className="fa-solid fa-angles-right"></i>
-                    </a>
-                  )}
-                  {currentPage == settings.totalPages && (
-                    <a
-                      href="#"
-                      className="btn-theme"
-                      onClick={onPageSubmitted}
-                    >
-                      <i className="fa-solid fa-paper-plane"></i> &nbsp; Submit
-                    </a>
-                  )}
+                      {currentPage < settings.totalPages && (
+                        <a
+                          href="#"
+                          className="btn-theme"
+                          onClick={onPageSubmitted}
+                        >
+                          Next &nbsp;{" "}
+                          <i className="fa-solid fa-angles-right"></i>
+                        </a>
+                      )}
+                      {currentPage == settings.totalPages && (
+                        <a
+                          href="#"
+                          className="btn-theme"
+                          onClick={onPageSubmitted}
+                        >
+                          <i className="fa-solid fa-paper-plane"></i> &nbsp; Submit
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             )}
