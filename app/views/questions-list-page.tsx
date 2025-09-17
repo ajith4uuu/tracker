@@ -349,18 +349,32 @@ export default function QuestionsListPage() {
         }
       }
 
-      // Replace bracketed tokens like [field_name] and bare identifiers with literal JSON values from ctx
+      // Replace bracketed tokens like [field_name] and bare identifiers with placeholders first,
+      // then substitute placeholders with JSON literals. This prevents nested replacements.
+      const placeholders: string[] = [];
+      let iKey = 0;
       for (const k in ctx) {
         const escName = String(k).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
-        const valLit = JSON.stringify(ctx[k]);
+        const placeholder = `@@FIELD_${iKey}@@`;
+        placeholders.push(placeholder);
         // bracketed token [name]
-        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), valLit);
+        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), placeholder);
         // bare identifier (avoid replacing inside quotes, after dot, or inside existing brackets)
-        statement = statement.replace(new RegExp(`(?<!['"\.\\w\\[])\\b${escName}\\b`, 'g'), valLit);
+        statement = statement.replace(new RegExp(`(?<!['"\.\\w\\[])\\b${escName}\\b`, 'g'), placeholder);
+        iKey++;
       }
 
       // convert <> to !=
       statement = statement.replaceAll('<>', '!=');
+
+      // Now substitute placeholders with safe JSON literals
+      iKey = 0;
+      for (const k in ctx) {
+        const valLit = JSON.stringify(ctx[k]);
+        const placeholder = `@@FIELD_${iKey}@@`;
+        statement = statement.split(placeholder).join(valLit);
+        iKey++;
+      }
 
       try {
         consoleLog('evaluating with ctx (post-replace):', statement, ctx)
