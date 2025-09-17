@@ -697,7 +697,6 @@ export default function QuestionsListPage() {
       <div className="columns">
         <div className="column">
           <div className="section-header">{`Page ${currentPage}`}</div>
-          <div className="section-subheader"></div>
 
           <div className="section-content">
             {!settings.surveyCompleted && currPageQuestions && currPageQuestions.length > 0 && (
