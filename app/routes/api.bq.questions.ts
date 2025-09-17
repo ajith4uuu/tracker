@@ -20,6 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const root = base.replace(/\/$/, '');
   const candidates = [
+    `${root}/survey/questions`,
     `${root}/questions`,
     `${root}/api/questions`,
     `${root}`,
