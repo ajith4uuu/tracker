@@ -16,7 +16,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   if (request.method.toUpperCase() !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
 
   const base = getBase();
-  if (!base) return json({ success: false, error: 'BQ backend URL not configured' }, 428);
+  if (!base) {
+    return json({ success: false, error: 'BQ backend URL not configured', data: null }, 200);
+  }
   const userId = params.userId as string;
 
   try {
