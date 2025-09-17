@@ -1,6 +1,6 @@
-import type { ActionFunctionArgs } from "react-router";
 import { Storage } from "@google-cloud/storage";
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
+import type { ActionFunctionArgs } from "react-router";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method.toUpperCase() !== "POST") {
@@ -13,7 +13,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const MAX_REPORTS = Number(process.env.MAX_REPORTS || 4);
     const BUCKET = process.env.GCS_BUCKET || "";
-    const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
+    const PROJECT_ID = process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "";
     const LOCATION = (process.env.GCP_LOCATION || "us").toLowerCase();
     const PROCESSOR_ID = process.env.DOC_PROCESSOR_ID || "";
 
@@ -26,21 +26,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (f.size > 25 * 1024 * 1024) return json({ ok: false, error: "Max 25MB per file" }, 400);
     }
 
-    const credsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-    const gcpCreds = credsJson ? JSON.parse(credsJson) : null;
-
-    if (!PROJECT_ID || !BUCKET || !PROCESSOR_ID || !gcpCreds) {
-      return json({ ok: false, error: "Missing GCP env or credentials" }, 428);
+    if (!PROJECT_ID || !BUCKET || !PROCESSOR_ID) {
+      return json({ ok: false, error: "Missing GCP env: GCP_PROJECT_ID, GCP_LOCATION, DOC_PROCESSOR_ID, GCS_BUCKET" }, 428);
     }
 
-    const storage = new Storage({ projectId: PROJECT_ID, credentials: gcpCreds });
-    const bucket = storage.bucket(BUCKET);
+    const endpoint = LOCATION === "eu" ? "eu-documentai.googleapis.com" : "us-documentai.googleapis.com";
 
-    const docai = new DocumentProcessorServiceClient({
-      projectId: PROJECT_ID,
-      apiEndpoint: LOCATION === "eu" ? "eu-documentai.googleapis.com" : "us-documentai.googleapis.com",
-      credentials: gcpCreds,
-    });
+    const credsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    const useExplicitCreds = !!(credsJson && credsJson.trim());
+
+    const storage = useExplicitCreds
+      ? new Storage({ projectId: PROJECT_ID, credentials: JSON.parse(credsJson as string) })
+      : new Storage({ projectId: PROJECT_ID }); // ADC
+
+    const docai = useExplicitCreds
+      ? new DocumentProcessorServiceClient({ projectId: PROJECT_ID, apiEndpoint: endpoint, credentials: JSON.parse(credsJson as string) })
+      : new DocumentProcessorServiceClient({ projectId: PROJECT_ID, apiEndpoint: endpoint }); // ADC
+
+    const bucket = storage.bucket(BUCKET);
 
     const uploaded: Array<{ filename: string; gcsUri: string; contentType: string }> = [];
     const aggregated: any = { files: uploaded };
