@@ -12,57 +12,81 @@ function bqBackendURL(path: string) {
 async function requestBQBackend(path: string, method: string, reqData: any, respType: AxiosResponseType = 'json') {
     const url = bqBackendURL(path);
     try {
-        const response = await axios.request({
-            url,
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            data: reqData,
-            responseType: respType,
-            timeout: 10000,
-        });
+        const maxAttempts = 2;
+        let attempt = 0;
+        let lastErr: any = null;
 
-        consoleLog('[requestBQBackend] response URL:', url, 'status:', response.status);
+        while (attempt <= maxAttempts) {
+            try {
+                const response = await axios.request({
+                    url,
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    data: reqData,
+                    responseType: respType,
+                    timeout: 10000,
+                });
 
-        if (respType !== 'json') {
-            if (respType === 'blob') {
-                let fileName;
-                const disposition = response.headers['content-disposition'];
+                consoleLog('[requestBQBackend] response URL:', url, 'status:', response.status, 'attempt:', attempt);
 
-                if (disposition && disposition.indexOf('attachment') !== -1) {
-                    const filenameMatch = disposition.match(/filename="?(.+)"?/);
+                if (respType !== 'json') {
+                    if (respType === 'blob') {
+                        let fileName;
+                        const disposition = response.headers['content-disposition'];
 
-                    if (filenameMatch && filenameMatch.length === 2) {
-                        fileName = filenameMatch[1];
+                        if (disposition && disposition.indexOf('attachment') !== -1) {
+                            const filenameMatch = disposition.match(/filename="?(.+)"?/);
+
+                            if (filenameMatch && filenameMatch.length === 2) {
+                                fileName = filenameMatch[1];
+                            }
+                        }
+
+                        return [fileName, response.data];
                     }
+
+                    return response.data;
                 }
 
-                return [fileName, response.data];
+                // Flexible parsing: accept {success,data}, array payloads, or {questions:[...]}
+                const body = response.data;
+                let success = false, respData = null;
+                if (typeof body?.success !== 'undefined') {
+                    success = !!body.success;
+                    respData = typeof body?.data !== 'undefined' ? body.data : body?.questions ?? null;
+                } else if (Array.isArray(body)) {
+                    success = true;
+                    respData = body;
+                } else if (Array.isArray(body?.questions)) {
+                    success = true;
+                    respData = body.questions;
+                } else if (body && (response.status >= 200 && response.status < 300)) {
+                    success = true;
+                    respData = body;
+                }
+
+                return [success, respData];
+            } catch (err: any) {
+                lastErr = err;
+                // If it's a 5xx or 502 transient error, retry after a small backoff
+                const status = err?.response?.status;
+                consoleError('[requestBQBackend] attempt error:', attempt, status, err?.message || err);
+                if (status && status >= 500 && attempt < maxAttempts) {
+                    const waitMs = 300 * Math.pow(2, attempt);
+                    await new Promise(res => setTimeout(res, waitMs));
+                    attempt++;
+                    continue;
+                }
+                // otherwise break and let outer handler proceed
+                break;
             }
-
-            return response.data;
         }
 
-        // Flexible parsing: accept {success,data}, array payloads, or {questions:[...]}
-        const body = response.data;
-        let success = false, respData = null;
-        if (typeof body?.success !== 'undefined') {
-            success = !!body.success;
-            respData = typeof body?.data !== 'undefined' ? body.data : body?.questions ?? null;
-        } else if (Array.isArray(body)) {
-            success = true;
-            respData = body;
-        } else if (Array.isArray(body?.questions)) {
-            success = true;
-            respData = body.questions;
-        } else if (body && (response.status >= 200 && response.status < 300)) {
-            success = true;
-            respData = body;
-        }
-
-        return [success, respData];
+        // fallthrough to existing error handling
+        throw lastErr || new Error('Unknown request error');
     } catch(error: any) {
         consoleError('[requestBQBackend] Error occurred:', error);
 
