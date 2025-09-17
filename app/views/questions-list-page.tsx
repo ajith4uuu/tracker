@@ -357,10 +357,18 @@ export default function QuestionsListPage() {
 
       statement = statement.replaceAll('<>', '!=');
 
-      try {
-        consoleLog('evaluating with ctx:', statement, ctx)
+      // Replace any bare identifiers that are not known JS literals/objects with ctx['id'] to avoid ReferenceError
+      const keep = new Set(['true','false','null','undefined','NaN','Infinity','Math','Date','Number','String','parseInt','parseFloat','isNaN','isFinite']);
+      statement = statement.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (m: string, id: string) => {
+        if (Object.prototype.hasOwnProperty.call(ctx, id)) return `ctx['${id}']`;
+        if (keep.has(id)) return id;
+        if (/^\d+$/.test(id)) return id;
+        return `ctx['${id}']`;
+      });
 
-        // Evaluate inside a small sandbox where 'with(ctx)' allows bare identifiers to resolve to ctx properties
+      try {
+        consoleLog('evaluating with ctx (post-replace):', statement, ctx)
+
         // eslint-disable-next-line no-new-func
         const fn = new Function('ctx', `with (ctx) { return (${statement}); }`);
         const result = fn(ctx);
