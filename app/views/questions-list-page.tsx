@@ -20,6 +20,8 @@ import { consoleError, consoleLog, validateQuestionField } from "~/lib/utils";
 
 import type { AlertProps } from "~/components/ui/alert"
 import Alert from "~/components/ui/alert"
+import DocAIUploader from "~/components/ui/docai-uploader";
+import TEMP_QUESTIONS_DATA from "~/temp-data";
 
 export default function QuestionsListPage() {
   const { setPageTitle, currentLang, setCurrentLang, isLoading, toggleLoading, currentUser, errorToast, successToast, setPageType, scrollToTop, scrollToElement, toggleNavbar, toggleFooter } = useOutletContext();
@@ -58,7 +60,8 @@ export default function QuestionsListPage() {
     let pastResponses: any = {};
     let visibleQuestions = 0;
 
-    await new Promise(async (resolve) => {
+    try {
+      await new Promise(async (resolve) => {
       // consoleLog('page:',page)
 
       let newSettings: any = await fetchUserSettingsFromFirestore(currentUser.uid)
@@ -76,11 +79,57 @@ export default function QuestionsListPage() {
         if (!(firestoreQuestions && firestoreQuestions.length > 0)) {
           consoleLog('Uploading questions into Firestore from BigQuery...');
 
-          await BQLoadQuestionsIntoFirestore(currentUser.uid);
+          let usedFallback = false;
 
-          firestoreQuestions = await fetchAllQuestionsFromFirestore(currentUser.uid);
+          try {
+            await BQLoadQuestionsIntoFirestore(currentUser.uid);
+          } catch (error) {
+            consoleError('Failed to load questions from BigQuery into Firestore:', error);
 
-          newSettings = await fetchUserSettingsFromFirestore(currentUser.uid)
+            // Fallback: use bundled TEMP_QUESTIONS_DATA so UI remains functional
+            try {
+              const mapped = (TEMP_QUESTIONS_DATA || []).map((q: any, idx: number) => ({
+                id: q.FieldID ?? q.FieldId ?? String(idx + 1),
+                sequence: q.Sequence ?? idx + 1,
+                page: Number(((q.PageNo ?? (q as any).page) ?? 1) || 1),
+                name: q.FieldName || q.FieldName || ('field_' + (q.FieldID ?? idx + 1)),
+                label_en: q.Question_EN || q.Question_En || q.Question_En || '',
+                label_fr: q.Question_FR || q.Question_Fr || '',
+                type: (q.FieldType || 'descriptive').toLowerCase(),
+                choices_en: q.Choices_EN,
+                choices_fr: q.Choices_FR,
+                is_required: !!q.IsRequired,
+                charLimit: q.CharLimit,
+                format: q.Format,
+                displayCondition: q.DisplayCondition,
+              }));
+
+              setAllPagesQuestions([...mapped]);
+
+              firestoreQuestions = mapped;
+
+              newSettings = {
+                language: 'en',
+                totalPages: mapped.reduce((acc: number, it: any) => Math.max(acc, Number(it.page) || 1), 1),
+                resumePage: 1,
+                surveyCompleted: false,
+              };
+
+              usedFallback = true;
+
+              consoleLog('Using TEMP_QUESTIONS_DATA fallback, totalPages:', newSettings.totalPages);
+            } catch (e) {
+              toggleLoading(false);
+              errorToast('Unable to fetch questions from backend and fallback failed. Error: ' + (error?.message || String(error)));
+              return;
+            }
+          }
+
+          if (!usedFallback) {
+            firestoreQuestions = await fetchAllQuestionsFromFirestore(currentUser.uid);
+
+            newSettings = await fetchUserSettingsFromFirestore(currentUser.uid)
+          }
         }
 
         setAllPagesQuestions([
@@ -218,6 +267,12 @@ export default function QuestionsListPage() {
 
       resolve("Questions fetched.");
     });
+    } catch (error) {
+      consoleError('Error fetching questions data:', error)
+      toggleLoading(false)
+      errorToast('Unable to load questions. Please refresh and try again.')
+      return
+    }
 
     /* let resumeData = null;
     try {
@@ -243,17 +298,23 @@ export default function QuestionsListPage() {
     setCurrPageQuestions(tempPageQuestions);
     setResponses(pastResponses);
 
-    // Skip If there are no questions visible in this page
+    // Skip only if this page has questions but all are hidden by conditions
     if (visibleQuestions === 0) {
-      consoleLog('Skipping the page as there are no questions visible!')
-
-      if (dir == 'b') {
-        onPageSubmitted(null, page - 1, false)
+      if (tempPageQuestions && tempPageQuestions.length > 0) {
+        consoleLog('Skipping the page as there are no visible questions!')
+        if (dir == 'b') {
+          onPageSubmitted(null, page - 1, false)
+        } else {
+          onPageSubmitted(null, page + 1, false)
+        }
+        return
       } else {
-        onPageSubmitted(null, page + 1, false)
+        consoleLog('No questions exist for this page; showing empty state')
+        toggleLoading(false)
+        setCurrentPage(page)
+        scrollToTop()
+        return
       }
-
-      return
     }
 
     toggleLoading(false);
@@ -269,9 +330,16 @@ export default function QuestionsListPage() {
 
       consoleLog('question.displayCondition:', question.displayCondition)
 
+      // Build a context object with all question values so identifiers resolve safely
+      const ctx: any = {};
       for (let i = 0; i < allPagesQuestions.length; i++) {
-        // consoleLog('allPagesQuestions[i]:', allPagesQuestions[i]);
+        const q = allPagesQuestions[i];
+        if (!q || !q.name) continue;
+        ctx[String(q.name)] = (responses[q.id] ?? {}).value ?? null;
+      }
 
+      // Preserve original dependency-checking behavior (recursive visibility)
+      for (let i = 0; i < allPagesQuestions.length; i++) {
         if (question.id == allPagesQuestions[i].id) continue
 
         if (statement.indexOf(allPagesQuestions[i].name) > -1) {
@@ -279,17 +347,73 @@ export default function QuestionsListPage() {
             return false
           }
         }
+      }
 
-        const resp = responses[allPagesQuestions[i].id] ?? {};
+      // First, replace ANY bracketed tokens [name] with their literal values (or null if missing)
+      statement = statement.replace(/\[([A-Za-z_][A-Za-z0-9_]*)\]/g, (m: string, name: string) => {
+        try {
+          const v = (ctx as any)[name];
+          return v == null ? 'null' : JSON.stringify(v);
+        } catch {
+          return 'null';
+        }
+      });
 
-        statement = statement.replace(new RegExp(`\\[${allPagesQuestions[i].name}\\]`, 'g'), `'${resp.value}'`)
-        statement = statement.replaceAll('<>', '!=');
+      // Replace bracketed tokens like [field_name] and bare identifiers with placeholders first,
+      // then substitute placeholders with JSON literals. This prevents nested replacements for known keys in ctx.
+      const placeholders: string[] = [];
+      let iKey = 0;
+      for (const k in ctx) {
+        const escName = String(k).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+        const placeholder = `@@FIELD_${iKey}@@`;
+        placeholders.push(placeholder);
+        // bracketed token [name] (already handled above, but keep to catch different casing/variants)
+        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), placeholder);
+        // bare identifier (avoid replacing inside quotes, after dot, or inside existing brackets)
+        statement = statement.replace(new RegExp(`(?<!['"\.\\w\\[])\\b${escName}\\b`, 'g'), placeholder);
+        iKey++;
+      }
+
+      // convert <> to !=
+      statement = statement.replaceAll('<>', '!=');
+
+      // Now substitute placeholders with safe JSON literals
+      iKey = 0;
+      for (const k in ctx) {
+        const v = (ctx as any)[k];
+        const valLit = (v == null ? 'null' : JSON.stringify(v));
+        const placeholder = `@@FIELD_${iKey}@@`;
+        statement = statement.split(placeholder).join(valLit);
+        iKey++;
       }
 
       try {
-        consoleLog('evaluating:', statement)
+        consoleLog('evaluating with ctx (post-replace):', statement, ctx)
 
-        if (eval(statement)) {
+        // Basic safety check: only allow a restricted set of characters after replacement.
+        const safePattern = /^[\sA-Za-z0-9_\[\]\'\"\(\)\.,:;<>!=&|+\-/*%?]+$/;
+        if (!safePattern.test(statement)) {
+          consoleError('Unsafe displayCondition detected, skipping eval:', statement);
+          return false;
+        }
+
+        // Evaluate by binding all ctx keys as function parameters to avoid ReferenceError
+        const keys = Object.keys(ctx || {});
+        const vals = keys.map(k => (ctx as any)[k]);
+
+        // If there are no keys, still evaluate safely
+        let result: any = false;
+        if (keys.length === 0) {
+          // eslint-disable-next-line no-new-func
+          const fnNoCtx = new Function(`return (${statement});`);
+          result = fnNoCtx();
+        } else {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function(...keys, `return (${statement});`);
+          result = fn(...vals);
+        }
+
+        if (result) {
           consoleLog('display condition met')
 
           return true
@@ -297,7 +421,7 @@ export default function QuestionsListPage() {
           return false
         }
       } catch(error) {
-        consoleError('Error when evaluating the displayCondition:', error)
+        consoleError('Error when evaluating the displayCondition:', error, 'statement:', statement)
 
         return false
       }
@@ -335,49 +459,113 @@ export default function QuestionsListPage() {
       consoleLog('formatted statement', statement)
 
       try {
-        consoleLog('[END_SURVEY_CONDITIONS] evaluating:', statement)
+        // Reset statement to original to avoid any prior naive replacements
+        statement = String(END_SURVEY_CONDITIONS[esI]);
 
-        if (eval(statement)) {
-          consoleLog('end survey conditions met')
+        // Build context from all questions so identifiers resolve
+        const ctx: any = {};
+        for (let i = 0; i < allPagesQuestions.length; i++) {
+          const qAll = allPagesQuestions[i];
+          if (!qAll || !qAll.name) continue;
+          const resp = (updatedResponses[qAll.id] ?? responses[qAll.id]) ?? {};
+          ctx[String(qAll.name)] = resp.value ?? null;
+        }
 
-          toggleConfirmation({
-              title: 'End the Survey?',
-              message: 'You have selected an option that triggers this survey to end right now. To save your responses and end the survey, click the \'End Survey\' button below. If you have selected the wrong option by accident and/or wish to return to the survey, click the \'Return and Edit Response\' button.',
-              okBtn: {
-                  content: 'Return and Edit Response',
-                  callback: () => {
-                      toggleConfirmation(null)
+        // Replace bracketed tokens first
+        statement = statement.replace(/\[([A-Za-z_][A-Za-z0-9_]*)\]/g, (m: string, name: string) => {
+          try {
+            const v = (ctx as any)[name];
+            return v == null ? 'null' : JSON.stringify(v);
+          } catch {
+            return 'null';
+          }
+        });
 
-                      setResponses((prevValue: any) => {
-                        if (!prevValue[question.id]) {
-                          prevValue[question.id] = {
-                            'id': question.id,
-                            'name': question.name,
+        // Placeholders for known identifiers, then substitute with JSON literals
+        let iKey = 0;
+        for (const k in ctx) {
+          const escName = String(k).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+          const placeholder = `@@END_FIELD_${iKey}@@`;
+          statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), placeholder);
+          statement = statement.replace(new RegExp(`(?<!['"\.\\w\\[])\\b${escName}\\b`, 'g'), placeholder);
+          iKey++;
+        }
+
+        // normalize operators
+        statement = statement.replaceAll('<>', '!=');
+
+        iKey = 0;
+        for (const k in ctx) {
+          const v = (ctx as any)[k];
+          const valLit = (v == null ? 'null' : JSON.stringify(v));
+          const placeholder = `@@END_FIELD_${iKey}@@`;
+          statement = statement.split(placeholder).join(valLit);
+          iKey++;
+        }
+
+        consoleLog('[END_SURVEY_CONDITIONS] evaluating (post-replace):', statement, ctx)
+
+        const safePattern = /^[\sA-Za-z0-9_\[\]'"\(\)\.,:;<>!=&|+\-/*%?]+$/;
+        if (!safePattern.test(statement)) {
+          consoleError('Unsafe END_SURVEY_CONDITIONS detected, skipping eval:', statement);
+        } else {
+          // Evaluate by binding all ctx keys as function parameters to avoid ReferenceError
+          const keys = Object.keys(ctx || {});
+          const vals = keys.map(k => (ctx as any)[k]);
+
+          let result: any = false;
+          if (keys.length === 0) {
+            // eslint-disable-next-line no-new-func
+            const fnNoCtx = new Function(`return (${statement});`);
+            result = fnNoCtx();
+          } else {
+            // eslint-disable-next-line no-new-func
+            const fn = new Function(...keys, `return (${statement});`);
+            result = fn(...vals);
+          }
+
+          if (result) {
+            consoleLog('end survey conditions met')
+
+            toggleConfirmation({
+                title: 'End the Survey?',
+                message: 'You have selected an option that triggers this survey to end right now. To save your responses and end the survey, click the \'End Survey\' button below. If you have selected the wrong option by accident and/or wish to return to the survey, click the \'Return and Edit Response\' button.',
+                okBtn: {
+                    content: 'Return and Edit Response',
+                    callback: () => {
+                        toggleConfirmation(null)
+
+                        setResponses((prevValue: any) => {
+                          if (!prevValue[question.id]) {
+                            prevValue[question.id] = {
+                              'id': question.id,
+                              'name': question.name,
+                            }
                           }
-                        }
 
-                        prevValue[question.id].value = null
+                          prevValue[question.id].value = null
 
-                        return prevValue
-                      })
-                  }
-              },
-              cancelBtn: {
-                  content: 'End Survey',
-                  callback: async () => {
-                      toggleConfirmation(null)
+                          return prevValue
+                        })
+                    }
+                },
+                cancelBtn: {
+                    content: 'End Survey',
+                    callback: async () => {
+                        toggleConfirmation(null)
 
-                      setSettings(prevData => {
-                        return {
-                          ...prevData,
-                          'surveyCompleted': true
-                        }
-                      })
-                  }
-              }
-          })
+                        setSettings(prevData => {
+                          return {
+                            ...prevData,
+                            'surveyCompleted': true
+                          }
+                        })
+                    }
+                }
+            })
 
-          break
+            break
+          }
         }
       } catch(error) {
         consoleError('Error when evaluating the END_SURVEY_CONDITIONS:', error)
@@ -615,69 +803,68 @@ export default function QuestionsListPage() {
           <div className="section-content">
             {!settings.surveyCompleted && currPageQuestions && currPageQuestions.length > 0 && (
               <>
-                {/* <div className="notification is-info is-light">
-                  <strong className="mb-2">Note:</strong>
-                  <ul>
-                    <li>
-                      (<span className="required-field-marker">*</span>) marked
-                      fields are mandatory.
-                    </li>
-                  </ul>
-                </div> */}
+                <div className="page-content-card card">
+                  <div className="card-content">
+                    <div className="questions-list">
+                      {currPageQuestions.map((question, index) => {
+                        if (!isQuestionVisible(question)) {
+                          return null;
+                        }
 
-                <div className="questions-list">
-                  {currPageQuestions.map((question, index) => {
-                    if (!isQuestionVisible(question)) {
-                      return null;
-                    }
+                        const isEmailField = (question.name || '').toLowerCase() === 'pt_email';
 
-                    // if (['calc'].includes(question.type)) {
-                    //   return null;
-                    // }
+                        return (
+                          <div key={`${question.id ?? 'q'}-${index}`} className="question-row">
+                            {isEmailField && (
+                              <DocAIUploader key={`docai-${question.id ?? index}`} />
+                            )}
+                            <QuestionField
+                              key={`qf-${question.id ?? index}`}
+                              question={question}
+                              value={((responses[question.id] ?? {}).value ?? null)}
+                              questionIndex={index}
+                              setQuestionValue={onQuestionValueChanged}
+                              language={settings.language}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                    return (
-                      <QuestionField
-                        key={question.id}
-                        question={question}
-                        value={((responses[question.id] ?? {}).value ?? null)}
-                        questionIndex={index}
-                        setQuestionValue={onQuestionValueChanged}
-                        language={settings.language}
-                      />
-                    );
-                  })}
-                </div>
+                    <div className="questions-actions py-5">
+                      {currentPage > 1 && (
+                        <a
+                          href="#"
+                          className="btn-theme"
+                          onClick={(e) => onPageSubmitted(e, "b", false)}
+                        >
+                          <i className="fa-solid fa-angles-left"></i> &nbsp; Back
+                        </a>
+                      )}
 
-                <div className="questions-actions py-5">
-                  {currentPage > 1 && (
-                    <a
-                      href="#"
-                      className="btn-theme mr-auto"
-                      onClick={(e) => onPageSubmitted(e, "b", false)}
-                    >
-                      <i className="fa-solid fa-angles-left"></i> &nbsp; Previous
-                      Page
-                    </a>
-                  )}
-                  {currentPage < settings.totalPages && (
-                    <a
-                      href="#"
-                      className="btn-theme ml-auto"
-                      onClick={onPageSubmitted}
-                    >
-                      Next Page &nbsp;{" "}
-                      <i className="fa-solid fa-angles-right"></i>
-                    </a>
-                  )}
-                  {currentPage == settings.totalPages && (
-                    <a
-                      href="#"
-                      className="btn-theme"
-                      onClick={onPageSubmitted}
-                    >
-                      <i className="fa-solid fa-paper-plane"></i> &nbsp; Submit
-                    </a>
-                  )}
+                      <span className="resume-code">{`Resume code: ${((currentUser?.uid || '').slice(0,6) || '------').toUpperCase()}`}</span>
+
+                      {currentPage < settings.totalPages && (
+                        <a
+                          href="#"
+                          className="btn-theme"
+                          onClick={onPageSubmitted}
+                        >
+                          Next &nbsp;{" "}
+                          <i className="fa-solid fa-angles-right"></i>
+                        </a>
+                      )}
+                      {currentPage == settings.totalPages && (
+                        <a
+                          href="#"
+                          className="btn-theme"
+                          onClick={onPageSubmitted}
+                        >
+                          <i className="fa-solid fa-paper-plane"></i> &nbsp; Submit
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             )}

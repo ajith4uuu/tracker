@@ -1,10 +1,8 @@
-
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Outlet } from "react-router";
 import { APP_TITLE, LANGUAGES_AVAILABLE } from '~/constant';
 
-import { FirebaseAuth } from "../../firebaseConfig";
-import { onAuthStateChanged, signInAnonymously } from "firebase/auth"
+import { subscribeAuth, signInAnonymously } from "~/lib/authWrapper"
 import { consoleError, consoleLog } from "~/lib/utils";
 import Toast from "./toast";
 
@@ -126,8 +124,6 @@ export default function BasePageLayout() {
                 langObj = fr
             }
 
-            // consoleLog('langObj:', langObj)
-
             if (typeof(langObj[code]) === 'undefined') {
                 text = code
             } else {
@@ -176,13 +172,16 @@ export default function BasePageLayout() {
 
         document.addEventListener('click', langDropDownOutsideClickListener)
 
-        const unsubscribe = onAuthStateChanged(FirebaseAuth, user => {
+        // Use unified auth wrapper (real Firebase or mock) to subscribe to auth state
+        let unsubscribe: any = () => {}
+
+        unsubscribe = subscribeAuth((user: any) => {
             if (user) {
                 setCurrentUser(user)
 
                 consoleLog('Authenticated user:', user)
             } else {
-                signInAnonymously(FirebaseAuth).catch(error => {
+                signInAnonymously().catch((error: any) => {
                     consoleError('Error occurred when signing into Firebase:', error)
 
                     setCurrentUser(-1)
@@ -192,7 +191,13 @@ export default function BasePageLayout() {
             document.removeEventListener('click', langDropDownOutsideClickListener)
         })
 
-        return unsubscribe
+        return () => {
+            try {
+                if (typeof unsubscribe === 'function') unsubscribe()
+            } catch(e) {
+                // ignore
+            }
+        }
     }, [])
 
     useEffect(() => {
@@ -211,24 +216,25 @@ export default function BasePageLayout() {
                 isNavbarVisible && !isLoading &&
                 <header ref={headerRef}>
                     <img src="/assets/images/logo.png" alt={APP_TITLE + " Logo"} />
-                    {
-                        LANGUAGES_AVAILABLE.length > 0 &&
-                        <>
+                    <div className="header-actions">
+                        <button className="btn-theme is-light" onClick={() => {
+                            const code = prompt('Enter your resume code');
+                            if (code) {
+                                // TODO: implement resume-by-code navigation
+                                console.log('Resume with code:', code);
+                            }
+                        }}>Resume</button>
+                        {LANGUAGES_AVAILABLE.length > 0 && (
                             <div className="lang-dropdown" ref={langContainerRef}>
                                 <button className="lang-switch" onClick={onLangSwitchClicked}>{currentLangText}</button>
-
                                 <div className={"lang-dropdown-menu " + (isLangDropdownActive ? 'show' : '')}>
-                                    {
-                                        LANGUAGES_AVAILABLE.map((lang, i) => {
-                                            return (
-                                                <a key={"lang-" + i} className={(lang.code == currentLang ? "is-selected" : "")} onClick={e => onChooseLanguageClicked(e, lang.code)}>{lang.label}</a>
-                                            )
-                                        })
-                                    }
+                                    {LANGUAGES_AVAILABLE.map((lang, i) => (
+                                        <a key={"lang-" + i} className={(lang.code == currentLang ? "is-selected" : "")} onClick={e => onChooseLanguageClicked(e, lang.code)}>{lang.label}</a>
+                                    ))}
                                 </div>
                             </div>
-                        </>
-                    }
+                        )}
+                    </div>
                 </header>
             }
 
@@ -264,7 +270,6 @@ export default function BasePageLayout() {
 
             <main className={"bd-docs is-fullwidth " + (pageType === 'auth' ? 'auth-page' : '')}>
                 <div className="container">
-                    {/* Render the Page component */}
                     {
                         currentUser && currentUser !== -1 &&
                         <Outlet context={{

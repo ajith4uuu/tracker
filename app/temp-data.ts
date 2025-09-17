@@ -1,4 +1,4 @@
-const TEMP_QUESTIONS_DATA = [
+export const TEMP_QUESTIONS_DATA = [
   {
     "PageNo": 1,
     "FieldID": 2.0,
@@ -1471,4 +1471,4 @@ const TEMP_QUESTIONS_DATA = [
   }
 ];
 
-module.exports = {TEMP_QUESTIONS_DATA};
+export default TEMP_QUESTIONS_DATA;
