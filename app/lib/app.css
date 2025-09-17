@@ -153,6 +153,8 @@ body > header img {
 
 /* Ensure any stray white bar below header is hidden */
 .section-subheader { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; }
+/* Guard: if any stray div is inserted right after header, hide it */
+.section-header + div:not(.section-content) { display: none !important; }
 
 body > main {
   padding: 1rem;
