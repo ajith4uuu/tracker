@@ -349,24 +349,18 @@ export default function QuestionsListPage() {
         }
       }
 
-      // Replace bracketed tokens like [field_name] with ctx['field_name'] so they resolve
+      // Replace bracketed tokens like [field_name] and bare identifiers with literal JSON values from ctx
       for (const k in ctx) {
         const escName = String(k).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
-        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), `ctx['${k}']`);
+        const valLit = JSON.stringify(ctx[k]);
+        // bracketed token [name]
+        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), valLit);
+        // bare identifier (avoid replacing inside quotes, after dot, or inside existing brackets)
+        statement = statement.replace(new RegExp(`(?<!['"\.\\w\\[])\\b${escName}\\b`, 'g'), valLit);
       }
 
+      // convert <> to !=
       statement = statement.replaceAll('<>', '!=');
-
-      // Replace any bare identifiers that are not known JS literals/objects with ctx['id'] to avoid ReferenceError
-      const keep = new Set(['true','false','null','undefined','NaN','Infinity','Math','Date','Number','String','parseInt','parseFloat','isNaN','isFinite']);
-      // Avoid replacing identifiers inside quotes or already inserted ctx['...'] by ensuring the preceding char is not quote/bracket/dot/word
-      const identRegex = /(?<!['"\.\w\]])\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
-      statement = statement.replace(identRegex, (m: string, id: string) => {
-        if (keep.has(id)) return id;
-        if (/^\d+$/.test(id)) return id;
-        // If ctx has the key, reference it, otherwise still reference ctx to yield undefined/null safely
-        return `ctx['${id}']`;
-      });
 
       try {
         consoleLog('evaluating with ctx (post-replace):', statement, ctx)
