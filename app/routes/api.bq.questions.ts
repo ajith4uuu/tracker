@@ -46,5 +46,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       lastErr = { url, message: e?.message || String(e) };
     }
   }
-  return json({ success: false, error: 'Upstream fetch failed', detail: lastErr }, 502);
+  // Return 200 with empty data so client can use fallback and avoid Axios non-2xx exceptions.
+  return json({ success: false, error: 'Upstream fetch failed', detail: lastErr, data: [] }, 200);
 }
