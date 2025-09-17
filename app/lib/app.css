@@ -134,10 +134,13 @@ body > header img {
 
 /* Content */
 .section-content {
-  padding: 20px;
+  padding: 12px 20px 20px 20px; /* reduce top padding to remove thin gap */
   max-width: 900px;
   margin: 0 auto;
 }
+
+/* Lift the card to sit directly under the header */
+.section-content > .page-content-card { margin-top: 8px; }
 
 /* Card that matches the header width */
 .page-content-card {
