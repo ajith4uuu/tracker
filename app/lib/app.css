@@ -123,12 +123,13 @@ body > header img {
   background: linear-gradient(90deg, #ff8ab5 0%, #ffc6d8 100%);
   color: #4a4a4a;
   padding: 10px 16px;
-  margin: 20px auto 12px auto;
+  margin: 20px auto 8px auto;
   font-size: 1.1rem;
   font-weight: 700;
   text-align: left;
   border-radius: 12px;
   width: 100%;
+  max-width: 900px;
 }
 
 /* Content */
@@ -136,6 +137,30 @@ body > header img {
   padding: 20px;
   max-width: 900px;
   margin: 0 auto;
+}
+
+/* Subheader white tile directly under the gradient header */
+.section-subheader {
+  background: #fff;
+  color: #4a4a4a;
+  padding: 8px 16px;
+  margin: 0 auto 16px auto;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 900px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.06) inset;
+}
+
+/* Card that matches the header width */
+.page-content-card {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto 24px auto;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.page-content-card .card-content {
+  padding: 1.25rem;
 }
 
 body > main {
