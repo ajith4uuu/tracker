@@ -50,8 +50,22 @@ async function requestBQBackend(path: string, method: string, reqData: any, resp
             }
 
             if (response.data) {
-                success = response.data.success;
-                respData = response.data.data;
+                // Flexible parsing: accept {success,data}, array payloads, or {questions:[...]}
+                const body = response.data;
+                if (typeof body?.success !== 'undefined') {
+                    success = !!body.success;
+                    respData = typeof body?.data !== 'undefined' ? body.data : body?.questions ?? null;
+                } else if (Array.isArray(body)) {
+                    success = true;
+                    respData = body;
+                } else if (Array.isArray(body?.questions)) {
+                    success = true;
+                    respData = body.questions;
+                } else if (body && (response.status >= 200 && response.status < 300)) {
+                    // Last resort: treat any 2xx JSON as success
+                    success = true;
+                    respData = body;
+                }
             }
         }
 
