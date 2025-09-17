@@ -21,6 +21,7 @@ import { consoleError, consoleLog, validateQuestionField } from "~/lib/utils";
 import type { AlertProps } from "~/components/ui/alert"
 import Alert from "~/components/ui/alert"
 import DocAIUploader from "~/components/ui/docai-uploader";
+import TEMP_QUESTIONS_DATA from "~/temp-data";
 
 export default function QuestionsListPage() {
   const { setPageTitle, currentLang, setCurrentLang, isLoading, toggleLoading, currentUser, errorToast, successToast, setPageType, scrollToTop, scrollToElement, toggleNavbar, toggleFooter } = useOutletContext();
