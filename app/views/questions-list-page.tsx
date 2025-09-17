@@ -448,49 +448,99 @@ export default function QuestionsListPage() {
       consoleLog('formatted statement', statement)
 
       try {
-        consoleLog('[END_SURVEY_CONDITIONS] evaluating:', statement)
+        // Build context from all questions so identifiers resolve
+        const ctx: any = {};
+        for (let i = 0; i < allPagesQuestions.length; i++) {
+          const qAll = allPagesQuestions[i];
+          if (!qAll || !qAll.name) continue;
+          const resp = (updatedResponses[qAll.id] ?? responses[qAll.id]) ?? {};
+          ctx[String(qAll.name)] = resp.value ?? null;
+        }
 
-        if (eval(statement)) {
-          consoleLog('end survey conditions met')
+        // Replace bracketed tokens first
+        statement = statement.replace(/\[([A-Za-z_][A-Za-z0-9_]*)\]/g, (m: string, name: string) => {
+          try {
+            const v = (ctx as any)[name];
+            return v == null ? 'null' : JSON.stringify(v);
+          } catch {
+            return 'null';
+          }
+        });
 
-          toggleConfirmation({
-              title: 'End the Survey?',
-              message: 'You have selected an option that triggers this survey to end right now. To save your responses and end the survey, click the \'End Survey\' button below. If you have selected the wrong option by accident and/or wish to return to the survey, click the \'Return and Edit Response\' button.',
-              okBtn: {
-                  content: 'Return and Edit Response',
-                  callback: () => {
-                      toggleConfirmation(null)
+        // Placeholders for known identifiers, then substitute with JSON literals
+        let iKey = 0;
+        for (const k in ctx) {
+          const escName = String(k).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+          const placeholder = `@@END_FIELD_${iKey}@@`;
+          statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), placeholder);
+          statement = statement.replace(new RegExp(`(?<!['"\.\\w\\[])\\b${escName}\\b`, 'g'), placeholder);
+          iKey++;
+        }
 
-                      setResponses((prevValue: any) => {
-                        if (!prevValue[question.id]) {
-                          prevValue[question.id] = {
-                            'id': question.id,
-                            'name': question.name,
+        // normalize operators
+        statement = statement.replaceAll('<>', '!=');
+
+        iKey = 0;
+        for (const k in ctx) {
+          const v = (ctx as any)[k];
+          const valLit = (v == null ? 'null' : JSON.stringify(v));
+          const placeholder = `@@END_FIELD_${iKey}@@`;
+          statement = statement.split(placeholder).join(valLit);
+          iKey++;
+        }
+
+        consoleLog('[END_SURVEY_CONDITIONS] evaluating (post-replace):', statement, ctx)
+
+        const safePattern = /^[\sA-Za-z0-9_\[\]'"\(\)\.,:;<>!=&|+\-/*%?]+$/;
+        if (!safePattern.test(statement)) {
+          consoleError('Unsafe END_SURVEY_CONDITIONS detected, skipping eval:', statement);
+        } else {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function('ctx', `with (ctx) { return (${statement}); }`);
+          const result = fn(ctx);
+
+          if (result) {
+            consoleLog('end survey conditions met')
+
+            toggleConfirmation({
+                title: 'End the Survey?',
+                message: 'You have selected an option that triggers this survey to end right now. To save your responses and end the survey, click the \'End Survey\' button below. If you have selected the wrong option by accident and/or wish to return to the survey, click the \'Return and Edit Response\' button.',
+                okBtn: {
+                    content: 'Return and Edit Response',
+                    callback: () => {
+                        toggleConfirmation(null)
+
+                        setResponses((prevValue: any) => {
+                          if (!prevValue[question.id]) {
+                            prevValue[question.id] = {
+                              'id': question.id,
+                              'name': question.name,
+                            }
                           }
-                        }
 
-                        prevValue[question.id].value = null
+                          prevValue[question.id].value = null
 
-                        return prevValue
-                      })
-                  }
-              },
-              cancelBtn: {
-                  content: 'End Survey',
-                  callback: async () => {
-                      toggleConfirmation(null)
+                          return prevValue
+                        })
+                    }
+                },
+                cancelBtn: {
+                    content: 'End Survey',
+                    callback: async () => {
+                        toggleConfirmation(null)
 
-                      setSettings(prevData => {
-                        return {
-                          ...prevData,
-                          'surveyCompleted': true
-                        }
-                      })
-                  }
-              }
-          })
+                        setSettings(prevData => {
+                          return {
+                            ...prevData,
+                            'surveyCompleted': true
+                          }
+                        })
+                    }
+                }
+            })
 
-          break
+            break
+          }
         }
       } catch(error) {
         consoleError('Error when evaluating the END_SURVEY_CONDITIONS:', error)
