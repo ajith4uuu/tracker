@@ -349,15 +349,20 @@ export default function QuestionsListPage() {
         }
       }
 
+      // First, replace ANY bracketed tokens [name] with their literal values (or null if missing)
+      statement = statement.replace(/\[([A-Za-z_][A-Za-z0-9_]*)\]/g, (m: string, name: string) => {
+        try { return JSON.stringify((ctx as any)[name] ?? null); } catch { return 'null'; }
+      });
+
       // Replace bracketed tokens like [field_name] and bare identifiers with placeholders first,
-      // then substitute placeholders with JSON literals. This prevents nested replacements.
+      // then substitute placeholders with JSON literals. This prevents nested replacements for known keys in ctx.
       const placeholders: string[] = [];
       let iKey = 0;
       for (const k in ctx) {
         const escName = String(k).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
         const placeholder = `@@FIELD_${iKey}@@`;
         placeholders.push(placeholder);
-        // bracketed token [name]
+        // bracketed token [name] (already handled above, but keep to catch different casing/variants)
         statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), placeholder);
         // bare identifier (avoid replacing inside quotes, after dot, or inside existing brackets)
         statement = statement.replace(new RegExp(`(?<!['"\.\\w\\[])\\b${escName}\\b`, 'g'), placeholder);
