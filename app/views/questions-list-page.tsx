@@ -343,7 +343,11 @@ export default function QuestionsListPage() {
 
         const resp = responses[allPagesQuestions[i].id] ?? {};
 
-        statement = statement.replace(new RegExp(`\\[${allPagesQuestions[i].name}\\]`, 'g'), `'${resp.value}'`)
+        const qName = String(allPagesQuestions[i].name || '');
+        const escName = qName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const valueSafe = String(resp.value ?? '').replace(/'/g, "\\'");
+        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), `'${valueSafe}'`);
+        statement = statement.replace(new RegExp(`\\b${escName}\\b`, 'g'), `'${valueSafe}'`);
         statement = statement.replaceAll('<>', '!=');
       }
 
