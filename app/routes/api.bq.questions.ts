@@ -16,7 +16,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (request.method.toUpperCase() !== 'GET') return json({ success: false, error: 'Method not allowed' }, 405);
 
   const base = getBase();
-  if (!base) return json({ success: false, error: 'BQ backend URL not configured' }, 428);
+  if (!base) {
+    // Return 200 with empty data so client code can handle fallback without Axios throwing.
+    return json({ success: false, error: 'BQ backend URL not configured', data: [] }, 200);
+  }
 
   const root = base.replace(/\/$/, '');
   const candidates = [
