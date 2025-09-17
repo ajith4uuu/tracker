@@ -8,7 +8,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const form = await request.formData();
+    let form;
+    try {
+      form = await request.formData();
+    } catch (e: any) {
+      // Common runtime when body was consumed already
+      const msg = e?.message || String(e);
+      if (/already read|body/.test(msg)) {
+        return json({ ok: false, error: 'Request body already read' }, 400);
+      }
+      throw e;
+    }
+
     const files = form.getAll("files").filter(Boolean) as File[];
 
     const MAX_REPORTS = Number(process.env.MAX_REPORTS || 4);
