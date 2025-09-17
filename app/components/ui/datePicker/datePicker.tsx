@@ -39,7 +39,8 @@ export default function DatePicker(
                 type="text"
                 className={"input " + (error ? 'is-danger' : '')}
                 id={"question-" + id}
-                value={value ?? ''} />
+                value={value ?? ''}
+                readOnly={true} />
 
             {
                 error &&
