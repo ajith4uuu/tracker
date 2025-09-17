@@ -330,9 +330,16 @@ export default function QuestionsListPage() {
 
       consoleLog('question.displayCondition:', question.displayCondition)
 
+      // Build a context object with all question values so identifiers resolve safely
+      const ctx: any = {};
       for (let i = 0; i < allPagesQuestions.length; i++) {
-        // consoleLog('allPagesQuestions[i]:', allPagesQuestions[i]);
+        const q = allPagesQuestions[i];
+        if (!q || !q.name) continue;
+        ctx[String(q.name)] = (responses[q.id] ?? {}).value ?? '';
+      }
 
+      // Preserve original dependency-checking behavior (recursive visibility)
+      for (let i = 0; i < allPagesQuestions.length; i++) {
         if (question.id == allPagesQuestions[i].id) continue
 
         if (statement.indexOf(allPagesQuestions[i].name) > -1) {
@@ -340,21 +347,25 @@ export default function QuestionsListPage() {
             return false
           }
         }
-
-        const resp = responses[allPagesQuestions[i].id] ?? {};
-
-        const qName = String(allPagesQuestions[i].name || '');
-        const escName = qName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const valueSafe = String(resp.value ?? '').replace(/'/g, "\\'");
-        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), `'${valueSafe}'`);
-        statement = statement.replace(new RegExp(`\\b${escName}\\b`, 'g'), `'${valueSafe}'`);
-        statement = statement.replaceAll('<>', '!=');
       }
 
-      try {
-        consoleLog('evaluating:', statement)
+      // Replace bracketed tokens like [field_name] with ctx['field_name'] so they resolve
+      for (const k in ctx) {
+        const escName = String(k).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+        statement = statement.replace(new RegExp(`\\[${escName}\\]`, 'g'), `ctx['${k}']`);
+      }
 
-        if (eval(statement)) {
+      statement = statement.replaceAll('<>', '!=');
+
+      try {
+        consoleLog('evaluating with ctx:', statement, ctx)
+
+        // Evaluate inside a small sandbox where 'with(ctx)' allows bare identifiers to resolve to ctx properties
+        // eslint-disable-next-line no-new-func
+        const fn = new Function('ctx', `with (ctx) { return (${statement}); }`);
+        const result = fn(ctx);
+
+        if (result) {
           consoleLog('display condition met')
 
           return true
