@@ -97,6 +97,7 @@ async function requestBQBackend(path: string, method: string, reqData: any, resp
             const errResp = error?.response;
             if (errResp) {
                 const body = errResp.data;
+                consoleError('[requestBQBackend] upstream response body:', body);
                 // normalize common shapes
                 if (Array.isArray(body)) return [false, body];
                 if (body && Array.isArray(body.questions)) return [false, body.questions];
