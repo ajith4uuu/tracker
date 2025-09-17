@@ -84,9 +84,41 @@ export default function QuestionsListPage() {
           } catch (error) {
             consoleError('Failed to load questions from BigQuery into Firestore:', error);
 
-            toggleLoading(false);
-            errorToast('Unable to fetch questions from backend. Please check the BQ backend service. Error: ' + (error?.message || String(error)));
-            return;
+            // Fallback: use bundled TEMP_QUESTIONS_DATA so UI remains functional
+            try {
+              const mapped = (TEMP_QUESTIONS_DATA || []).map((q: any, idx: number) => ({
+                id: q.FieldID ?? q.FieldId ?? String(idx + 1),
+                sequence: q.Sequence ?? idx + 1,
+                page: q.PageNo ?? q.PageNo ?? q.PageNo || 1,
+                name: q.FieldName || q.FieldName || ('field_' + (q.FieldID ?? idx + 1)),
+                label_en: q.Question_EN || q.Question_En || q.Question_En || '',
+                label_fr: q.Question_FR || q.Question_Fr || '',
+                type: (q.FieldType || 'descriptive').toLowerCase(),
+                choices_en: q.Choices_EN,
+                choices_fr: q.Choices_FR,
+                is_required: !!q.IsRequired,
+                charLimit: q.CharLimit,
+                format: q.Format,
+                displayCondition: q.DisplayCondition,
+              }));
+
+              setAllPagesQuestions([...mapped]);
+
+              firestoreQuestions = mapped;
+
+              newSettings = {
+                language: 'en',
+                totalPages: mapped.reduce((acc: number, it: any) => Math.max(acc, Number(it.page) || 1), 1),
+                resumePage: 1,
+                surveyCompleted: false,
+              };
+
+              consoleLog('Using TEMP_QUESTIONS_DATA fallback, totalPages:', newSettings.totalPages);
+            } catch (e) {
+              toggleLoading(false);
+              errorToast('Unable to fetch questions from backend and fallback failed. Error: ' + (error?.message || String(error)));
+              return;
+            }
           }
 
           firestoreQuestions = await fetchAllQuestionsFromFirestore(currentUser.uid);
