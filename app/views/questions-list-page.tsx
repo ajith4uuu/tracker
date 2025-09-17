@@ -89,7 +89,7 @@ export default function QuestionsListPage() {
               const mapped = (TEMP_QUESTIONS_DATA || []).map((q: any, idx: number) => ({
                 id: q.FieldID ?? q.FieldId ?? String(idx + 1),
                 sequence: q.Sequence ?? idx + 1,
-                page: q.PageNo ?? q.PageNo ?? q.PageNo || 1,
+                page: Number(((q.PageNo ?? (q as any).page) ?? 1) || 1),
                 name: q.FieldName || q.FieldName || ('field_' + (q.FieldID ?? idx + 1)),
                 label_en: q.Question_EN || q.Question_En || q.Question_En || '',
                 label_fr: q.Question_FR || q.Question_Fr || '',
