@@ -359,10 +359,12 @@ export default function QuestionsListPage() {
 
       // Replace any bare identifiers that are not known JS literals/objects with ctx['id'] to avoid ReferenceError
       const keep = new Set(['true','false','null','undefined','NaN','Infinity','Math','Date','Number','String','parseInt','parseFloat','isNaN','isFinite']);
-      statement = statement.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (m: string, id: string) => {
-        if (Object.prototype.hasOwnProperty.call(ctx, id)) return `ctx['${id}']`;
+      // Avoid replacing identifiers inside quotes or already inserted ctx['...'] by ensuring the preceding char is not quote/bracket/dot/word
+      const identRegex = /(?<!['"\.\w\]])\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
+      statement = statement.replace(identRegex, (m: string, id: string) => {
         if (keep.has(id)) return id;
         if (/^\d+$/.test(id)) return id;
+        // If ctx has the key, reference it, otherwise still reference ctx to yield undefined/null safely
         return `ctx['${id}']`;
       });
 
