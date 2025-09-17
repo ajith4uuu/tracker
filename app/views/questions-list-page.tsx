@@ -255,17 +255,23 @@ export default function QuestionsListPage() {
     setCurrPageQuestions(tempPageQuestions);
     setResponses(pastResponses);
 
-    // Skip If there are no questions visible in this page
+    // Skip only if this page has questions but all are hidden by conditions
     if (visibleQuestions === 0) {
-      consoleLog('Skipping the page as there are no questions visible!')
-
-      if (dir == 'b') {
-        onPageSubmitted(null, page - 1, false)
+      if (tempPageQuestions && tempPageQuestions.length > 0) {
+        consoleLog('Skipping the page as there are no visible questions!')
+        if (dir == 'b') {
+          onPageSubmitted(null, page - 1, false)
+        } else {
+          onPageSubmitted(null, page + 1, false)
+        }
+        return
       } else {
-        onPageSubmitted(null, page + 1, false)
+        consoleLog('No questions exist for this page; showing empty state')
+        toggleLoading(false)
+        setCurrentPage(page)
+        scrollToTop()
+        return
       }
-
-      return
     }
 
     toggleLoading(false);
