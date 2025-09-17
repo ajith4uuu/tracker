@@ -18,11 +18,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const base = getBase();
   if (!base) return json({ success: false, error: 'BQ backend URL not configured' }, 428);
 
-  try {
-    const resp = await fetch(`${base.replace(/\/$/, '')}/questions`, { headers: { 'accept': 'application/json' } });
-    const data = await resp.json();
-    return json(data, resp.status);
-  } catch (e: any) {
-    return json({ success: false, error: e?.message || 'Upstream error' }, 502);
+  const root = base.replace(/\/$/, '');
+  const candidates = [
+    `${root}/questions`,
+    `${root}/api/questions`,
+    `${root}`,
+  ];
+
+  let lastErr: any = null;
+  for (const url of candidates) {
+    try {
+      const resp = await fetch(url, { headers: { 'accept': 'application/json' } });
+      if (!resp.ok) { lastErr = new Error(`HTTP ${resp.status}`); continue; }
+      const body = await resp.json();
+      // Normalize to { success, data }
+      const data = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : (Array.isArray(body?.questions) ? body.questions : body));
+      return json({ success: true, data }, 200);
+    } catch (e: any) {
+      lastErr = e;
+    }
   }
+  return json({ success: false, error: lastErr?.message || 'Upstream error' }, 502);
 }
