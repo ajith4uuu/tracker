@@ -509,9 +509,20 @@ export default function QuestionsListPage() {
         if (!safePattern.test(statement)) {
           consoleError('Unsafe END_SURVEY_CONDITIONS detected, skipping eval:', statement);
         } else {
-          // eslint-disable-next-line no-new-func
-          const fn = new Function('ctx', `with (ctx) { return (${statement}); }`);
-          const result = fn(ctx);
+          // Evaluate by binding all ctx keys as function parameters to avoid ReferenceError
+          const keys = Object.keys(ctx || {});
+          const vals = keys.map(k => (ctx as any)[k]);
+
+          let result: any = false;
+          if (keys.length === 0) {
+            // eslint-disable-next-line no-new-func
+            const fnNoCtx = new Function(`return (${statement});`);
+            result = fnNoCtx();
+          } else {
+            // eslint-disable-next-line no-new-func
+            const fn = new Function(...keys, `return (${statement});`);
+            result = fn(...vals);
+          }
 
           if (result) {
             consoleLog('end survey conditions met')
