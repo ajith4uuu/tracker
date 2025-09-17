@@ -695,19 +695,18 @@ export default function QuestionsListPage() {
                     const isEmailField = (question.name || '').toLowerCase() === 'pt_email';
 
                     return (
-                      <>
+                      <div key={question.id} className="question-row">
                         {isEmailField && (
                           <DocAIUploader />
                         )}
                         <QuestionField
-                          key={question.id}
                           question={question}
                           value={((responses[question.id] ?? {}).value ?? null)}
                           questionIndex={index}
                           setQuestionValue={onQuestionValueChanged}
                           language={settings.language}
                         />
-                      </>
+                      </div>
                     );
                   })}
                 </div>
