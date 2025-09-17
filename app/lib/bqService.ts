@@ -4,8 +4,8 @@ import { getFirestoreBatch, getFirestoreDoc, questionsCollectionID, sanitizeObj,
 import { consoleError, consoleLog } from './utils';
 
 function bqBackendURL(path: string) {
-    const base = (import.meta as any)?.env?.VITE_BQ_BACKEND_API_ENDPOINT;
-    const origin = base && String(base).trim().length ? String(base) : '/api/bq';
+    // Always hit server proxy; server will forward to Cloud Run using env
+    const origin = '/api/bq';
     return origin.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
 }
 
