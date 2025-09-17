@@ -335,7 +335,7 @@ export default function QuestionsListPage() {
       for (let i = 0; i < allPagesQuestions.length; i++) {
         const q = allPagesQuestions[i];
         if (!q || !q.name) continue;
-        ctx[String(q.name)] = (responses[q.id] ?? {}).value ?? '';
+        ctx[String(q.name)] = (responses[q.id] ?? {}).value ?? null;
       }
 
       // Preserve original dependency-checking behavior (recursive visibility)
@@ -351,7 +351,12 @@ export default function QuestionsListPage() {
 
       // First, replace ANY bracketed tokens [name] with their literal values (or null if missing)
       statement = statement.replace(/\[([A-Za-z_][A-Za-z0-9_]*)\]/g, (m: string, name: string) => {
-        try { return JSON.stringify((ctx as any)[name] ?? null); } catch { return 'null'; }
+        try {
+          const v = (ctx as any)[name];
+          return v == null ? 'null' : JSON.stringify(v);
+        } catch {
+          return 'null';
+        }
       });
 
       // Replace bracketed tokens like [field_name] and bare identifiers with placeholders first,
@@ -375,7 +380,8 @@ export default function QuestionsListPage() {
       // Now substitute placeholders with safe JSON literals
       iKey = 0;
       for (const k in ctx) {
-        const valLit = JSON.stringify(ctx[k]);
+        const v = (ctx as any)[k];
+        const valLit = (v == null ? 'null' : JSON.stringify(v));
         const placeholder = `@@FIELD_${iKey}@@`;
         statement = statement.split(placeholder).join(valLit);
         iKey++;
