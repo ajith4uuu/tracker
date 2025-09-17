@@ -391,16 +391,27 @@ export default function QuestionsListPage() {
         consoleLog('evaluating with ctx (post-replace):', statement, ctx)
 
         // Basic safety check: only allow a restricted set of characters after replacement.
-        // This prevents accidental invalid JS from reaching new Function and throwing SyntaxError.
         const safePattern = /^[\sA-Za-z0-9_\[\]\'\"\(\)\.,:;<>!=&|+\-/*%?]+$/;
         if (!safePattern.test(statement)) {
           consoleError('Unsafe displayCondition detected, skipping eval:', statement);
           return false;
         }
 
-        // eslint-disable-next-line no-new-func
-        const fn = new Function('ctx', `with (ctx) { return (${statement}); }`);
-        const result = fn(ctx);
+        // Evaluate by binding all ctx keys as function parameters to avoid ReferenceError
+        const keys = Object.keys(ctx || {});
+        const vals = keys.map(k => (ctx as any)[k]);
+
+        // If there are no keys, still evaluate safely
+        let result: any = false;
+        if (keys.length === 0) {
+          // eslint-disable-next-line no-new-func
+          const fnNoCtx = new Function(`return (${statement});`);
+          result = fnNoCtx();
+        } else {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function(...keys, `return (${statement});`);
+          result = fn(...vals);
+        }
 
         if (result) {
           consoleLog('display condition met')
