@@ -448,6 +448,9 @@ export default function QuestionsListPage() {
       consoleLog('formatted statement', statement)
 
       try {
+        // Reset statement to original to avoid any prior naive replacements
+        statement = String(END_SURVEY_CONDITIONS[esI]);
+
         // Build context from all questions so identifiers resolve
         const ctx: any = {};
         for (let i = 0; i < allPagesQuestions.length; i++) {
