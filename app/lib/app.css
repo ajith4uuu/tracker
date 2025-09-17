@@ -139,18 +139,6 @@ body > header img {
   margin: 0 auto;
 }
 
-/* Subheader white tile directly under the gradient header */
-.section-subheader {
-  background: #fff;
-  color: #4a4a4a;
-  padding: 8px 16px;
-  margin: 0 auto 16px auto;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 900px;
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.06) inset;
-}
-
 /* Card that matches the header width */
 .page-content-card {
   width: 100%;
