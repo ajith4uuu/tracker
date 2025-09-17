@@ -10,9 +10,10 @@ function bqBackendURL(path: string) {
 }
 
 async function requestBQBackend(path: string, method: string, reqData: any, respType: AxiosResponseType = 'json') {
+    const url = bqBackendURL(path);
     try {
         const response = await axios.request({
-            url: bqBackendURL(path),
+            url,
             method: method,
             headers: {
                 'Content-Type': 'application/json',
@@ -20,58 +21,67 @@ async function requestBQBackend(path: string, method: string, reqData: any, resp
             },
             data: reqData,
             responseType: respType,
+            timeout: 10000,
         });
 
-        consoleLog('[requestBQBackend] response:', response);
+        consoleLog('[requestBQBackend] response URL:', url, 'status:', response.status);
 
-        let success = false, respData = null;
+        if (respType !== 'json') {
+            if (respType === 'blob') {
+                let fileName;
+                const disposition = response.headers['content-disposition'];
 
-        if (response) {
-            consoleLog('[requestBQBackend] response:', response);
+                if (disposition && disposition.indexOf('attachment') !== -1) {
+                    const filenameMatch = disposition.match(/filename="?(.+)"?/);
 
-            if (respType !== 'json') {
-
-                if (respType === 'blob') {
-                    let fileName;
-                    const disposition = response.headers['content-disposition'];
-
-                    if (disposition && disposition.indexOf('attachment') !== -1) {
-                        const filenameMatch = disposition.match(/filename="?(.+)"?/);
-
-                        if (filenameMatch.length === 2) {
-                            fileName = filenameMatch[1];
-                        }
+                    if (filenameMatch && filenameMatch.length === 2) {
+                        fileName = filenameMatch[1];
                     }
-
-                    return [fileName, response.data];
                 }
 
-                return response.data;
+                return [fileName, response.data];
             }
 
-            if (response.data) {
-                // Flexible parsing: accept {success,data}, array payloads, or {questions:[...]}
-                const body = response.data;
-                if (typeof body?.success !== 'undefined') {
-                    success = !!body.success;
-                    respData = typeof body?.data !== 'undefined' ? body.data : body?.questions ?? null;
-                } else if (Array.isArray(body)) {
-                    success = true;
-                    respData = body;
-                } else if (Array.isArray(body?.questions)) {
-                    success = true;
-                    respData = body.questions;
-                } else if (body && (response.status >= 200 && response.status < 300)) {
-                    // Last resort: treat any 2xx JSON as success
-                    success = true;
-                    respData = body;
-                }
-            }
+            return response.data;
+        }
+
+        // Flexible parsing: accept {success,data}, array payloads, or {questions:[...]}
+        const body = response.data;
+        let success = false, respData = null;
+        if (typeof body?.success !== 'undefined') {
+            success = !!body.success;
+            respData = typeof body?.data !== 'undefined' ? body.data : body?.questions ?? null;
+        } else if (Array.isArray(body)) {
+            success = true;
+            respData = body;
+        } else if (Array.isArray(body?.questions)) {
+            success = true;
+            respData = body.questions;
+        } else if (body && (response.status >= 200 && response.status < 300)) {
+            success = true;
+            respData = body;
         }
 
         return [success, respData];
-    } catch(error) {
+    } catch(error: any) {
         consoleError('[requestBQBackend] Error occurred:', error);
+
+        // try direct backend if configured (client-side fallback)
+        try {
+            const directBase = (import.meta as any)?.env?.VITE_BQ_BACKEND_API_ENDPOINT;
+            if (directBase && String(directBase).trim()) {
+                const directUrl = directBase.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
+                consoleLog('[requestBQBackend] trying direct backend:', directUrl);
+                const directResp = await axios.request({ url: directUrl, method, data: reqData, headers: { 'Accept': 'application/json' }, timeout: 10000 });
+                const body = directResp.data;
+                if (Array.isArray(body)) return [true, body];
+                if (body && Array.isArray(body.questions)) return [true, body.questions];
+                if (body && typeof body.success !== 'undefined') return [!!body.success, body.data ?? null];
+                return [directResp.status >= 200 && directResp.status < 300, body];
+            }
+        } catch (e: any) {
+            consoleError('[requestBQBackend] direct backend attempt failed:', e);
+        }
 
         return null;
     }
