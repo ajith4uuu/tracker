@@ -12,8 +12,7 @@ export const LANGUAGES_AVAILABLE = [
 ];
 
 export const END_SURVEY_CONDITIONS = [
-    'pt_contact_request == 0'
+    "pt_contact_request == 'Yes'"
 ];
 
 export const CONSENT_FILE_QUESTION_FIELD_NAME = 'confirmation_file';
-
