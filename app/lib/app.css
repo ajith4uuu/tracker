@@ -151,6 +151,9 @@ body > header img {
   padding: 1.25rem;
 }
 
+/* Ensure any stray white bar below header is hidden */
+.section-subheader { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; }
+
 body > main {
   padding: 1rem;
   display: flex;
