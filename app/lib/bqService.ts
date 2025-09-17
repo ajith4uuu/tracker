@@ -66,6 +66,23 @@ async function requestBQBackend(path: string, method: string, reqData: any, resp
     } catch(error: any) {
         consoleError('[requestBQBackend] Error occurred:', error);
 
+        // If the error has an HTTP response (non-2xx), try to extract the body
+        // and return a structured result so callers can handle it instead of
+        // letting Axios throw an exception to the console.
+        try {
+            const errResp = error?.response;
+            if (errResp) {
+                const body = errResp.data;
+                // normalize common shapes
+                if (Array.isArray(body)) return [false, body];
+                if (body && Array.isArray(body.questions)) return [false, body.questions];
+                if (body && typeof body.data !== 'undefined') return [false, body.data];
+                return [false, body];
+            }
+        } catch (e) {
+            // ignore parsing errors
+        }
+
         // try direct backend if configured (client-side fallback)
         try {
             const directBase = (import.meta as any)?.env?.VITE_BQ_BACKEND_API_ENDPOINT;
@@ -83,7 +100,8 @@ async function requestBQBackend(path: string, method: string, reqData: any, resp
             consoleError('[requestBQBackend] direct backend attempt failed:', e);
         }
 
-        return null;
+        // return a structured empty response so callers can gracefully fallback
+        return [false, null];
     }
 }
 
