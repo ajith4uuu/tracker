@@ -113,6 +113,10 @@ export async function BQFetchQuestions() {
     if (response) {
         let [ success, data ] = response;
 
+        // If the backend returned an array payload even with success=false,
+        // accept it so callers can use available data instead of failing.
+        if (Array.isArray(data) && data.length > 0) return data;
+
         return success ? data : null;
     }
 
