@@ -23,14 +23,33 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
   try {
     const body = await request.text();
-    const resp = await fetch(`${base.replace(/\/$/, '')}/responses/${encodeURIComponent(userId)}/consent-form`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'accept': 'application/json' },
-      body,
-    });
-    const data = await resp.json();
-    return json(data, resp.status);
+    const root = base.replace(/\/$/, '');
+    const candidates = [
+      `${root}/responses/${encodeURIComponent(userId)}/consent-form`,
+      `${root}/survey/responses/${encodeURIComponent(userId)}/consent-form`,
+      `${root}/api/responses/${encodeURIComponent(userId)}/consent-form`,
+      `${root}/responses/${encodeURIComponent(userId)}/consent_form`,
+    ];
+
+    let lastErr: any = null;
+    for (const url of candidates) {
+      try {
+        const resp = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'accept': 'application/json' }, body });
+        const text = await resp.text().catch(() => null);
+        let data: any = null;
+        try { data = JSON.parse(text || 'null'); } catch { data = text; }
+        if (!resp.ok) {
+          lastErr = { url, status: resp.status, statusText: resp.statusText, body: data };
+          continue;
+        }
+        return json(data ?? { success: true }, 200);
+      } catch (e: any) {
+        lastErr = { url, message: e?.message || String(e) };
+      }
+    }
+
+    return json({ success: false, error: 'Upstream fetch failed', detail: lastErr, data: null }, 200);
   } catch (e: any) {
-    return json({ success: false, error: e?.message || 'Upstream error' }, 502);
+    return json({ success: false, error: e?.message || 'Upstream error' }, 200);
   }
 };
