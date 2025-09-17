@@ -79,6 +79,8 @@ export default function QuestionsListPage() {
         if (!(firestoreQuestions && firestoreQuestions.length > 0)) {
           consoleLog('Uploading questions into Firestore from BigQuery...');
 
+          let usedFallback = false;
+
           try {
             await BQLoadQuestionsIntoFirestore(currentUser.uid);
           } catch (error) {
@@ -113,6 +115,8 @@ export default function QuestionsListPage() {
                 surveyCompleted: false,
               };
 
+              usedFallback = true;
+
               consoleLog('Using TEMP_QUESTIONS_DATA fallback, totalPages:', newSettings.totalPages);
             } catch (e) {
               toggleLoading(false);
@@ -121,9 +125,11 @@ export default function QuestionsListPage() {
             }
           }
 
-          firestoreQuestions = await fetchAllQuestionsFromFirestore(currentUser.uid);
+          if (!usedFallback) {
+            firestoreQuestions = await fetchAllQuestionsFromFirestore(currentUser.uid);
 
-          newSettings = await fetchUserSettingsFromFirestore(currentUser.uid)
+            newSettings = await fetchUserSettingsFromFirestore(currentUser.uid)
+          }
         }
 
         setAllPagesQuestions([
