@@ -109,45 +109,47 @@ export async function BQLoadQuestionsIntoFirestore(userId: any) {
 
     consoleLog('questions from BQ:', questions);
 
-    if (questions) {
-        const batch = getFirestoreBatch();
-        let totalPages = 0;
-
-        questions.forEach((q: any) => {
-            let qId = `${q.FieldId}`;
-            let qContent = {
-                'id': q.FieldId,
-                'sequence': q.Sequence,
-                'page': q.PageNo,
-                'name': q.FieldName,
-                'label_en': q.Question_En,
-                'label_fr': q.Question_Fr,
-                'type': q.FieldType,
-                'choices_en': q.Choices_En,
-                'choices_fr': q.Choices_Fr,
-                'is_required': q.IsRequired,
-                'charLimit': q.CharLimit,
-                'format': q.Format,
-                'displayCondition': q.DisplayCondition,
-            };
-
-            consoleLog('question', qId, qContent);
-
-            batch.set(getFirestoreDoc(questionsCollectionID(userId), qId), sanitizeObj(qContent));
-
-            if (q.PageNo && !isNaN(q.PageNo)) {
-                totalPages = Math.max(totalPages, q.PageNo);
-            }
-        });
-
-        batch.set(getFirestoreDoc(settingsCollectionID(userId), 'values'), {
-            totalPages
-        }, {
-            merge: true
-        });
-
-        await batch.commit();
+    if (!questions || (Array.isArray(questions) && questions.length === 0)) {
+        throw new Error('BQ backend returned no questions');
     }
+
+    const batch = getFirestoreBatch();
+    let totalPages = 0;
+
+    questions.forEach((q: any) => {
+        let qId = `${q.FieldId}`;
+        let qContent = {
+            'id': q.FieldId,
+            'sequence': q.Sequence,
+            'page': q.PageNo,
+            'name': q.FieldName,
+            'label_en': q.Question_En,
+            'label_fr': q.Question_Fr,
+            'type': q.FieldType,
+            'choices_en': q.Choices_En,
+            'choices_fr': q.Choices_Fr,
+            'is_required': q.IsRequired,
+            'charLimit': q.CharLimit,
+            'format': q.Format,
+            'displayCondition': q.DisplayCondition,
+        };
+
+        consoleLog('question', qId, qContent);
+
+        batch.set(getFirestoreDoc(questionsCollectionID(userId), qId), sanitizeObj(qContent));
+
+        if (q.PageNo && !isNaN(q.PageNo)) {
+            totalPages = Math.max(totalPages, q.PageNo);
+        }
+    });
+
+    batch.set(getFirestoreDoc(settingsCollectionID(userId), 'values'), {
+        totalPages
+    }, {
+        merge: true
+    });
+
+    await batch.commit();
 }
 
 export async function BQGenerateConsentPDFForUser(userId: any, responses: any) {
