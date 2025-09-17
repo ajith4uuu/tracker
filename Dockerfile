@@ -1,23 +1,33 @@
-FROM node:20-alpine AS build
-
-WORKDIR /poc-register
-
+# ---------- Base Dependencies ----------
+FROM node:20-alpine AS deps
+WORKDIR /app
 COPY package*.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-COPY .env.production ./
-
-RUN npm install
-
+# ---------- Builder Stage ----------
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --ignore-scripts && npm cache clean --force
 COPY . .
-
 RUN npm run build
 
-FROM nginx:alpine
+# ---------- Runtime Stage ----------
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=8080
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Init + non-root user
+RUN apk add --no-cache tini
+RUN addgroup -g 1001 nodejs && adduser -D -u 1001 nodeuser -G nodejs
 
-COPY --from=build /poc-register/build/client /usr/share/nginx/html
+# Copy artifacts with correct ownership
+COPY --from=deps --chown=1001:1001 /app/node_modules ./node_modules
+COPY --from=build --chown=1001:1001 /app/build ./build
+COPY --chown=1001:1001 package*.json ./
 
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+USER nodeuser
+EXPOSE 8080
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["react-router-serve", "./build/server/index.js"]
