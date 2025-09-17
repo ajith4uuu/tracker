@@ -82,6 +82,10 @@ export default function QuestionsListPage() {
             await BQLoadQuestionsIntoFirestore(currentUser.uid);
           } catch (error) {
             consoleError('Failed to load questions from BigQuery into Firestore:', error);
+
+            toggleLoading(false);
+            errorToast('Unable to fetch questions from backend. Please check the BQ backend service. Error: ' + (error?.message || String(error)));
+            return;
           }
 
           firestoreQuestions = await fetchAllQuestionsFromFirestore(currentUser.uid);
