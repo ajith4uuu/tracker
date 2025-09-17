@@ -29,14 +29,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   for (const url of candidates) {
     try {
       const resp = await fetch(url, { headers: { 'accept': 'application/json' } });
-      if (!resp.ok) { lastErr = new Error(`HTTP ${resp.status}`); continue; }
-      const body = await resp.json();
-      // Normalize to { success, data }
+      const text = await resp.text().catch(() => null);
+      if (!resp.ok) {
+        lastErr = { url, status: resp.status, statusText: resp.statusText, body: text };
+        continue;
+      }
+      let body: any = null;
+      try { body = JSON.parse(text); } catch(_) { body = text; }
       const data = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : (Array.isArray(body?.questions) ? body.questions : body));
       return json({ success: true, data }, 200);
     } catch (e: any) {
-      lastErr = e;
+      lastErr = { url, message: e?.message || String(e) };
     }
   }
-  return json({ success: false, error: lastErr?.message || 'Upstream error' }, 502);
+  return json({ success: false, error: 'Upstream fetch failed', detail: lastErr }, 502);
 }
