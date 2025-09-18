@@ -1,30 +1,26 @@
-# -------- Base image (for caching) --------
+# -------- Base image --------
 FROM node:20-slim AS base
-ENV NODE_ENV=production
 ENV PORT=8080
 WORKDIR /app
-
-# Ensure reliable signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 
-# -------- Dependencies layer --------
+# -------- Dependencies (with dev deps) --------
 FROM base AS deps
-# Only copy package manifests for better caching
 COPY package*.json ./
-# Install all deps (allow scripts for packages that need postinstall)
-RUN npm ci && npm cache clean --force
+# Install ALL deps so build tools (e.g. @react-router/dev) are available
+RUN npm ci --include=dev && npm cache clean --force
 
-# -------- Build layer --------
+# -------- Build --------
 FROM base AS build
 WORKDIR /app
+ENV NODE_ENV=development
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Build with React Router (Vite). VITE_* come from .env.production baked in the image
 RUN npm run build
-# Prune devDependencies for runtime
+# Prune to production-only for runtime
 RUN npm prune --omit=dev && npm cache clean --force
 
-# -------- Runtime layer --------
+# -------- Runtime --------
 FROM node:20-slim AS runner
 ENV NODE_ENV=production
 ENV PORT=8080
@@ -32,7 +28,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/* \
   && addgroup --system nodejs && adduser --system --ingroup nodejs nodeuser
 
-# Copy artifacts
 COPY --chown=nodeuser:nodejs --from=build /app/node_modules ./node_modules
 COPY --chown=nodeuser:nodejs --from=build /app/build ./build
 COPY --chown=nodeuser:nodejs package*.json ./
