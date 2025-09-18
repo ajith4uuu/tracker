@@ -755,7 +755,7 @@ export default function QuestionsListPage() {
   }
 
   // Map DocAI extraction to survey fields and update responses
-  const applyDocAIExtraction = (extracted: any) => {
+  const applyDocAIExtraction = async (extracted: any) => {
     if (!extracted || typeof extracted !== 'object') return;
 
     const lang = settings.language || 'en';
