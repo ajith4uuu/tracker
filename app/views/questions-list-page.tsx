@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router";
 import { QuestionField } from "~/components/ui/question-field";
-import { CONSENT_FILE_QUESTION_FIELD_NAME, END_SURVEY_CONDITIONS, LANGUAGES_AVAILABLE } from "~/constant";
+import { CONSENT_FILE_QUESTION_FIELD_NAME, CONSENT_FILE_FIELD_ALIASES, END_SURVEY_CONDITIONS, LANGUAGES_AVAILABLE } from "~/constant";
 import { BQGenerateConsentPDFForUser, BQLoadQuestionsIntoFirestore } from "~/lib/bqService";
 import {
   fetchQuestionsFromFirestore,
