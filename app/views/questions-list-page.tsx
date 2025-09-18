@@ -862,6 +862,7 @@ export default function QuestionsListPage() {
     }
 
     setResponses(next);
+    try { await storeAllUserResponsesToFirestore(currentUser.uid, next); } catch(e) { consoleError('Failed to persist DocAI mapping:', e); }
   };
 
   useEffect(() => {
