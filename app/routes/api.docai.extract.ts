@@ -109,8 +109,35 @@ function extractFromText(text: string): Record<string, string> {
     if (er) out.ER = erNeg ? "Negative" : "Positive";
     if (pr) out.PR = prNeg ? "Negative" : "Positive";
   }
-  const her2 = /(her[- ]?2|her2\/neu)\b[^\n]*?(positive|negative|equivocal|positif|négatif|équivoque|pos|neg|0|1\+|2\+|3\+)/i.exec(t);
-  if (her2) out.HER2 = /3\+|positive|positif|pos/i.test(her2[0]) ? "Positive" : /2\+|equivocal|équivoque/i.test(her2[0]) ? "Equivocal" : "Negative";
+  // HER2: capture status and exact score (0/1+/2+/3+)
+  let her2 = /(her[- ]?2|her2\/neu)\b[^\n]*?(positive|negative|equivocal|positif|négatif|équivoque|pos|neg|0|1\+|2\+|3\+)/i.exec(t);
+  // Patterns like: "HER-2 neu score: NEGATIVE (0 staining)"
+  const her2Line = /her[- ]?2[^\n]*?(?:score|result)?[^\n]*?/i.exec(t);
+  const her2ScoreInParens = /\((\s*[0-3](?:\s*\+)?\s*stain(?:ing)?\s*)\)/i.exec(her2Line ? her2Line[0] : "");
+  const her2Explicit = /her[- ]?2[^\n]*?(positive|negative|equivocal)[^\n]*?(0|1\+|2\+|3\+)?/i.exec(t);
+
+  let her2Score: string | null = null;
+  let her2Status: string | null = null;
+
+  if (her2ScoreInParens) {
+    const s = her2ScoreInParens[1].toLowerCase();
+    if (/3\+/.test(s)) her2Score = '3+'; else if (/2\+/.test(s)) her2Score = '2+'; else if (/1\+/.test(s)) her2Score = '1+'; else if(/\b0\b/.test(s)) her2Score = '0';
+  }
+  if (her2Explicit) {
+    const stat = her2Explicit[1].toLowerCase();
+    if (/positif|positive|pos/.test(stat)) her2Status = 'Positive';
+    else if (/equivocal|équivoque/.test(stat)) her2Status = 'Equivocal';
+    else if (/négatif|negative|neg/.test(stat)) her2Status = 'Negative';
+    if (!her2Score && her2Explicit[2]) her2Score = her2Explicit[2].replace(/\s+/g,'');
+  }
+  if (!her2Status && her2) {
+    her2Status = /3\+|positive|positif|pos/i.test(her2[0]) ? 'Positive' : /2\+|equivocal|équivoque/i.test(her2[0]) ? 'Equivocal' : 'Negative';
+  }
+  if (!her2Score && her2) {
+    her2Score = /3\+/.test(her2[0]) ? '3+' : /2\+/.test(her2[0]) ? '2+' : /1\+/.test(her2[0]) ? '1+' : /\b0\b/.test(her2[0]) ? '0' : null;
+  }
+  if (her2Status) out.HER2 = her2Status;
+  if (her2Score) out.HER2Score = her2Score;
   const ki = /(ki[- ]?67)[^\n]*?(\d{1,3})\s*%/i.exec(t); if (ki) out.Ki67 = `${ki[2]}%`;
   const pdl1 = /(pd[- ]?l1)[^\n]*?(positive|negative|positif|négatif|\d{1,3}\s*%)/i.exec(t); if (pdl1) out.PDL1 = pdl1[0].trim();
   const pdl1Pct = /(pd[- ]?l1)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t) || /(ihc score|score ihc)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t); if (pdl1Pct) out.PDL1Percent = `${pdl1Pct[2]}%${pdl1Pct[3] ? " " + pdl1Pct[3].toUpperCase() : ""}`;
