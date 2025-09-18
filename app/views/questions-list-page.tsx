@@ -735,6 +735,73 @@ export default function QuestionsListPage() {
     toggleLangDropdown(!isLangDropdownActive)
   }
 
+  // Map DocAI extraction to survey fields and update responses
+  const applyDocAIExtraction = (extracted: any) => {
+    if (!extracted || typeof extracted !== 'object') return;
+
+    const lang = settings.language || 'en';
+
+    const parseOptions = (q: any) => {
+      const str = q?.[`choices_${lang}`] || q?.[`options_${lang}`] || q?.choices || q?.options || '';
+      const out: Array<{ value: string; label: string }> = [];
+      if (typeof str !== 'string' || !str) return out;
+      if (str.includes('||')) {
+        str.split('||').map(t => t.trim()).forEach(t => { const p = t.split('|'); if (p.length > 1) out.push({ value: p[0], label: p[1] }); });
+      } else if (str.includes('|')) {
+        str.split('|').map(t => t.trim()).forEach(t => out.push({ value: t, label: t }));
+      } else if (str.includes('\n')) {
+        str.split('\n').map(t => t.trim()).forEach(t => { if (t.includes('|')) { const p = t.split('|'); if (p.length > 1) out.push({ value: p[1], label: p[0] }); } else out.push({ value: t, label: t }); });
+      }
+      return out;
+    };
+
+    const pickByIncludes = (opts: any[], ...needles: string[]) => {
+      const n = needles.map(s => s.toLowerCase());
+      return opts.find(o => n.some(s => (o.label || '').toLowerCase().includes(s) || (o.value || '').toLowerCase().includes(s)))?.value ?? null;
+    };
+
+    const next: any = { ...responses };
+    const ensureSet = (q: any, val: any) => {
+      if (!q) return;
+      if (!next[q.id]) next[q.id] = { id: q.id, name: q.name };
+      next[q.id].value = val;
+    };
+
+    const all = allPagesQuestions || [];
+
+    // HER2 radio
+    const qHER2 = all.find((q: any) => /her[-\s]?2/i.test(q?.label_en || q?.label || ''));
+    if (qHER2 && extracted.HER2) {
+      const opts = parseOptions(qHER2);
+      const v = (/positive/i.test(extracted.HER2)) ? pickByIncludes(opts, '3+', 'positive')
+        : (/equivocal/i.test(extracted.HER2)) ? pickByIncludes(opts, '2+', 'equivocal')
+        : pickByIncludes(opts, '0', 'negative');
+      if (v) ensureSet(qHER2, v);
+    }
+
+    // Ki-67 text
+    const qKi = all.find((q: any) => /ki[-\s]?67/i.test(q?.label_en || q?.label || ''));
+    if (qKi && extracted.Ki67) {
+      const n = String(extracted.Ki67).replace('%', '').trim();
+      ensureSet(qKi, n);
+    }
+
+    // PD-L1 percent (text)
+    const qPDL1Pct = all.find((q: any) => /pd[-\s]?l1[^\n]*%|pd[-\s]?l1[^\n]*percent/i.test((q?.label_en || q?.label || '')));
+    if (qPDL1Pct && extracted.PDL1Percent) ensureSet(qPDL1Pct, String(extracted.PDL1Percent).replace('%', '').trim());
+
+    // Date of diagnosis (date)
+    const qDx = all.find((q: any) => /initial.*diagnosis|date.*diagnosis/i.test(q?.label_en || q?.label || ''));
+    if (qDx && extracted.dateOfDiagnosis) {
+      const d = String(extracted.dateOfDiagnosis);
+      const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(d);
+      const out = m ? `${Number(m[2])}/${Number(m[3])}/${m[1]}` : d; // m/d/Y
+      ensureSet(qDx, out);
+    }
+
+    setResponses(next);
+  };
+
   useEffect(() => {
     setPageTitle(`Page ${currentPage} of ${settings.totalPages}`);
 
