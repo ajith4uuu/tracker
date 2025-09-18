@@ -883,7 +883,7 @@ export default function QuestionsListPage() {
                         return (
                           <div key={`${question.id ?? 'q'}-${index}`} className="question-row">
                             {isEmailField && (
-                              <DocAIUploader key={`docai-${question.id ?? index}`} />
+                              <DocAIUploader key={`docai-${question.id ?? index}`} onExtract={(extracted: any) => applyDocAIExtraction(extracted)} />
                             )}
                             <QuestionField
                               key={`qf-${question.id ?? index}`}
