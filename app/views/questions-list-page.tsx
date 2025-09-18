@@ -219,7 +219,7 @@ export default function QuestionsListPage() {
 
             response.value = tempValue ?? null;
 
-            if (question.name === CONSENT_FILE_QUESTION_FIELD_NAME && response.downloadURL) {
+            if (CONSENT_FILE_FIELD_ALIASES.includes(question.name) && response.downloadURL) {
               question.downloadURL = response.downloadURL;
             }
           }
