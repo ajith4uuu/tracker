@@ -1,33 +1,43 @@
-# ---------- Base Dependencies ----------
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
-
-# ---------- Builder Stage ----------
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --ignore-scripts && npm cache clean --force
-COPY . .
-RUN npm run build
-
-# ---------- Runtime Stage ----------
-FROM node:20-alpine
-WORKDIR /app
+# -------- Base image (for caching) --------
+FROM node:20-slim AS base
 ENV NODE_ENV=production
 ENV PORT=8080
+WORKDIR /app
 
-# Init + non-root user
-RUN apk add --no-cache tini
-RUN addgroup -g 1001 nodejs && adduser -D -u 1001 nodeuser -G nodejs
+# Ensure reliable signal handling
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 
-# Copy artifacts with correct ownership
-COPY --from=deps --chown=1001:1001 /app/node_modules ./node_modules
-COPY --from=build --chown=1001:1001 /app/build ./build
-COPY --chown=1001:1001 package*.json ./
+# -------- Dependencies layer --------
+FROM base AS deps
+# Only copy package manifests for better caching
+COPY package*.json ./
+# Install all deps (allow scripts for packages that need postinstall)
+RUN npm ci && npm cache clean --force
+
+# -------- Build layer --------
+FROM base AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# Build with React Router (Vite). VITE_* come from .env.production baked in the image
+RUN npm run build
+# Prune devDependencies for runtime
+RUN npm prune --omit=dev && npm cache clean --force
+
+# -------- Runtime layer --------
+FROM node:20-slim AS runner
+ENV NODE_ENV=production
+ENV PORT=8080
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/* \
+  && addgroup --system nodejs && adduser --system --ingroup nodejs nodeuser
+
+# Copy artifacts
+COPY --chown=nodeuser:nodejs --from=build /app/node_modules ./node_modules
+COPY --chown=nodeuser:nodejs --from=build /app/build ./build
+COPY --chown=nodeuser:nodejs package*.json ./
 
 USER nodeuser
 EXPOSE 8080
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "node_modules/@react-router/serve/dist/cli.js", "./build/server/index.js"]
+ENTRYPOINT ["/usr/bin/tini","--"]
+CMD ["node","node_modules/@react-router/serve/dist/cli.js","./build/server/index.js"]
