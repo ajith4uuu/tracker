@@ -7,7 +7,7 @@ type ExtractResult = {
   extracted?: any;
 };
 
-export default function DocAIUploader() {
+export default function DocAIUploader({ onExtract }: { onExtract?: (extracted: any) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
