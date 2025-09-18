@@ -936,8 +936,7 @@ export default function QuestionsListPage() {
                 <div className="page-content-card card">
                   <div className="card-content">
                     <div className="questions-list">
-                      {(() => { const hasPath = currPageQuestions.some((q:any)=>/(estrogen\s*receptor|progesterone\s*receptor|her[-\s]?2|ki[-\s]?67|what\s*stage\s)/i.test(q?.label_en||q?.label||''));
-                        return hasPath ? (<DocAIUploader key={`docai-page-${currentPage}`} onExtract={(extracted: any) => applyDocAIExtraction(extracted)} />) : null; })()}
+                      {currentPage === 5 ? (<DocAIUploader key={`docai-page-${currentPage}`} onExtract={(extracted: any) => applyDocAIExtraction(extracted)} />) : null}
                       {currPageQuestions.map((question, index) => {
                         if (!isQuestionVisible(question)) {
                           return null;
@@ -947,10 +946,7 @@ export default function QuestionsListPage() {
 
                         return (
                           <div key={`${question.id ?? 'q'}-${index}`} className="question-row">
-                            {isEmailField && (
-                              <DocAIUploader key={`docai-${question.id ?? index}`} onExtract={(extracted: any) => applyDocAIExtraction(extracted)} />
-                            )}
-                            <QuestionField
+                                                        <QuestionField
                               key={`qf-${question.id ?? index}`}
                               question={question}
                               value={((responses[question.id] ?? {}).value ?? null)}
