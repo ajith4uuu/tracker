@@ -667,6 +667,25 @@ export default function QuestionsListPage() {
 
       await storeAllUserResponsesToFirestore(currentUser.uid, updatedResponses)
 
+      // If this page contains consent/signature confirmations, (re)generate consent PDF and persist its link
+      try {
+        const hasConsentStep = currPageQuestions.some((q: any) => /pt_signature|confirm|consent/i.test(String(q?.name || '')));
+        if (hasConsentStep) {
+          const [ok, payload] = await BQGenerateConsentPDFForUser(currentUser.uid, updatedResponses);
+          if (ok && payload && payload.consentFile) {
+            const consentQ = (allPagesQuestions || []).find((q: any) => CONSENT_FILE_FIELD_ALIASES.includes(q?.name));
+            if (consentQ) {
+              const downloadURL = await fetchFileDownloadURLFromGCS(payload.consentFile);
+              updatedResponses[String(consentQ.id)] = { id: consentQ.id, name: consentQ.name, value: payload.consentFile, downloadURL };
+              await storeAllUserResponsesToFirestore(currentUser.uid, updatedResponses);
+              setResponses(updatedResponses);
+            }
+          }
+        }
+      } catch (e) {
+        consoleError('Error when generating consent PDF after save:', e);
+      }
+
       resolve("Responses stored.");
     });
 
