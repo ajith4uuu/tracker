@@ -805,9 +805,42 @@ export default function QuestionsListPage() {
       ensureSet(qKi, n);
     }
 
+    // ER / PR
+    const qER = all.find((q:any)=>/estrogen\s*receptor|\ber\b/i.test(q?.label_en || q?.label || ''));
+    if (qER && extracted.ER) {
+      const opts = parseOptions(qER);
+      if (opts?.length) {
+        const v = /pos/i.test(extracted.ER) ? pickByIncludes(opts,'pos','positive') : pickByIncludes(opts,'neg','negative','0%');
+        if (v) ensureSet(qER, v); else ensureSet(qER, extracted.ER);
+      } else ensureSet(qER, extracted.ER);
+    }
+    const qPR = all.find((q:any)=>/progesterone\s*receptor|\bpr\b/i.test(q?.label_en || q?.label || ''));
+    if (qPR && extracted.PR) {
+      const opts = parseOptions(qPR);
+      if (opts?.length) {
+        const v = /pos/i.test(extracted.PR) ? pickByIncludes(opts,'pos','positive') : pickByIncludes(opts,'neg','negative','0%');
+        if (v) ensureSet(qPR, v); else ensureSet(qPR, extracted.PR);
+      } else ensureSet(qPR, extracted.PR);
+    }
+
     // PD-L1 percent (text)
     const qPDL1Pct = all.find((q: any) => /pd[-\s]?l1[^\n]*%|pd[-\s]?l1[^\n]*percent/i.test((q?.label_en || q?.label || '')));
     if (qPDL1Pct && extracted.PDL1Percent) ensureSet(qPDL1Pct, String(extracted.PDL1Percent).replace('%', '').trim());
+
+    // Stage at diagnosis (radio)
+    const qStage = all.find((q:any)=>/what\s*stage.*diagnosis/i.test(q?.label_en || q?.label || '')) || all.find((q:any)=>{
+      const opts = parseOptions(q)||[]; const labels = opts.map(o=>String(o.label||'').toLowerCase());
+      return labels.includes('stage 0') && labels.includes('stage i') && labels.includes('stage ii');
+    });
+    if (qStage && extracted.stage) {
+      const opts = parseOptions(qStage);
+      const val = /iv/i.test(extracted.stage) ? pickByIncludes(opts,'stage iv')
+        : /iii/i.test(extracted.stage) ? pickByIncludes(opts,'stage iii')
+        : /ii/i.test(extracted.stage) ? pickByIncludes(opts,'stage ii')
+        : /i\b/i.test(extracted.stage) ? pickByIncludes(opts,'stage i')
+        : pickByIncludes(opts,'stage 0','dcis');
+      if (val) ensureSet(qStage, val);
+    }
 
     // Date of diagnosis (date)
     const qDx = all.find((q: any) => /initial.*diagnosis|date.*diagnosis/i.test(q?.label_en || q?.label || ''));
