@@ -16,3 +16,4 @@ export const END_SURVEY_CONDITIONS = [
 ];
 
 export const CONSENT_FILE_QUESTION_FIELD_NAME = 'confirmation_file';
+export const CONSENT_FILE_FIELD_ALIASES = ['confirmation_file', 'confirm_file'];
