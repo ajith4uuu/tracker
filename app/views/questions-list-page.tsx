@@ -790,11 +790,21 @@ export default function QuestionsListPage() {
 
     // HER2 radio
     const qHER2 = all.find((q: any) => /her[-\s]?2/i.test(q?.label_en || q?.label || ''));
-    if (qHER2 && extracted.HER2) {
+    if (qHER2 && (extracted.HER2 || extracted.HER2Score)) {
       const opts = parseOptions(qHER2);
-      const v = (/positive/i.test(extracted.HER2)) ? pickByIncludes(opts, '3+', 'positive')
-        : (/equivocal/i.test(extracted.HER2)) ? pickByIncludes(opts, '2+', 'equivocal')
-        : pickByIncludes(opts, '0', 'negative');
+      let v: any = null;
+      if (extracted.HER2Score) {
+        const s = String(extracted.HER2Score).toLowerCase();
+        if (/3\+/.test(s)) v = pickByIncludes(opts,'3+');
+        else if (/2\+/.test(s)) v = pickByIncludes(opts,'2+');
+        else if (/1\+/.test(s)) v = pickByIncludes(opts,'+1','1+');
+        else if (/\b0\b/.test(s)) v = pickByIncludes(opts,'0');
+      }
+      if (!v && extracted.HER2) {
+        v = (/positive/i.test(extracted.HER2)) ? pickByIncludes(opts, '3+', 'positive')
+          : (/equivocal/i.test(extracted.HER2)) ? pickByIncludes(opts, '2+', 'equivocal')
+          : pickByIncludes(opts, '0', 'negative','1+');
+      }
       if (v) ensureSet(qHER2, v);
     }
 
