@@ -28,6 +28,7 @@ export default function DocAIUploader({ onExtract }: { onExtract?: (extracted: a
       const data: ExtractResult = await r.json();
       if (!data.ok) throw new Error(data.error || "Upload failed");
       setResult(data.extracted);
+      try { if (onExtract) onExtract(data.extracted); } catch {}
     } catch (e: any) {
       consoleError("DocAI upload failed:", e);
       alert(e?.message || "Upload failed");
