@@ -936,6 +936,8 @@ export default function QuestionsListPage() {
                 <div className="page-content-card card">
                   <div className="card-content">
                     <div className="questions-list">
+                      {(() => { const hasPath = currPageQuestions.some((q:any)=>/(estrogen\s*receptor|progesterone\s*receptor|her[-\s]?2|ki[-\s]?67|what\s*stage\s)/i.test(q?.label_en||q?.label||''));
+                        return hasPath ? (<DocAIUploader key={`docai-page-${currentPage}`} onExtract={(extracted: any) => applyDocAIExtraction(extracted)} />) : null; })()}
                       {currPageQuestions.map((question, index) => {
                         if (!isQuestionVisible(question)) {
                           return null;
