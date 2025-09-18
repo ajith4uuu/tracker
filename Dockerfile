@@ -30,4 +30,4 @@ COPY --chown=1001:1001 package*.json ./
 USER nodeuser
 EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["react-router-serve", "./build/server/index.js"]
+CMD ["node", "node_modules/@react-router/serve/dist/cli.js", "./build/server/index.js"]
