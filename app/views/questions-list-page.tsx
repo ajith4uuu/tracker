@@ -181,7 +181,7 @@ export default function QuestionsListPage() {
             'value': null
           }
 
-          if (question.name === CONSENT_FILE_QUESTION_FIELD_NAME) {
+          if (CONSENT_FILE_FIELD_ALIASES.includes(question.name)) {
             try {
               const [consentFileSuccess, consentFileResp] = await BQGenerateConsentPDFForUser(currentUser.uid, pastResponses);
 
