@@ -106,6 +106,8 @@ function extractFromText(text: string): Record<string, string> {
     const erStr = er ? (erNeg ? "ER-" : "ER+") : "";
     const prStr = pr ? (prNeg ? "PR-" : "PR+") : "";
     out.ERPR = `${erStr}${erStr && prStr ? "/" : ""}${prStr}`.trim();
+    if (er) out.ER = erNeg ? "Negative" : "Positive";
+    if (pr) out.PR = prNeg ? "Negative" : "Positive";
   }
   const her2 = /(her[- ]?2|her2\/neu)\b[^\n]*?(positive|negative|equivocal|positif|négatif|équivoque|pos|neg|0|1\+|2\+|3\+)/i.exec(t);
   if (her2) out.HER2 = /3\+|positive|positif|pos/i.test(her2[0]) ? "Positive" : /2\+|equivocal|équivoque/i.test(her2[0]) ? "Equivocal" : "Negative";
