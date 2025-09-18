@@ -15,9 +15,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Common runtime when body was consumed already
       const msg = e?.message || String(e);
       if (/already read|body/.test(msg)) {
-        return json({ ok: false, error: 'Request body already read' }, 400);
+        // Try cloning the request and read from clone as a fallback
+        try {
+          const cloned = request.clone();
+          form = await cloned.formData();
+        } catch (e2: any) {
+          return json({ ok: false, error: 'Request body already read and cannot be cloned' }, 400);
+        }
+      } else {
+        throw e;
       }
-      throw e;
     }
 
     const files = form.getAll("files").filter(Boolean) as File[];
