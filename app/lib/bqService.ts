@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ResponseType as AxiosResponseType } from 'axios';
+import axios, { type ResponseType as AxiosResponseType } from 'axios';
 import { getFirestoreBatch, getFirestoreDoc, questionsCollectionID, sanitizeObj, settingsCollectionID, settingsDocID } from './firestoreService';
 import { consoleError, consoleLog } from './utils';
 
@@ -182,7 +182,7 @@ export async function BQLoadQuestionsIntoFirestore(userId: any) {
             'name': q.FieldName,
             'label_en': q.Question_En,
             'label_fr': q.Question_Fr,
-            'type': q.FieldType,
+            'type': (q.FieldType || 'descriptive')?.toString().toLowerCase(),
             'choices_en': q.Choices_En,
             'choices_fr': q.Choices_Fr,
             'is_required': q.IsRequired,
