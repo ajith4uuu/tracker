@@ -47,8 +47,24 @@ export async function signInAnonymously() {
     }
   }
 
-  // mock sign-in: create a fake user and notify subscribers
-  mockUser = { uid: 'dev-anon', isAnonymous: true };
+  // mock sign-in: create a stable pseudo-UID so resume code isn't always the same
+  try {
+    const key = 'pt_mock_uid';
+    let uid = null;
+    if (typeof window !== 'undefined') {
+      uid = window.localStorage.getItem(key);
+      if (!uid) {
+        uid = 'anon-' + Math.random().toString(36).slice(2, 10);
+        window.localStorage.setItem(key, uid);
+      }
+    } else {
+      uid = 'anon-' + Math.random().toString(36).slice(2, 10);
+    }
+    mockUser = { uid, isAnonymous: true };
+  } catch {
+    mockUser = { uid: 'anon-' + Math.random().toString(36).slice(2, 10), isAnonymous: true } as any;
+  }
+
   for (const cb of Array.from(subscribers)) {
     try { cb(mockUser); } catch (e) { /* ignore subscriber errors */ }
   }

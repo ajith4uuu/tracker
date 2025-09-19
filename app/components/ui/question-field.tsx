@@ -4,7 +4,7 @@ import { consoleLog, validateQuestionField } from "~/lib/utils";
 import SignPad from "./signPad/signPad";
 import RangeSlider from "./rangeSlider/rangeSlider";
 import DatePicker from "./datePicker/datePicker";
-import { CONSENT_FILE_QUESTION_FIELD_NAME } from "~/constant";
+import { CONSENT_FILE_QUESTION_FIELD_NAME, CONSENT_FILE_FIELD_ALIASES } from "~/constant";
 
 export const NON_ANSWERABLE_QUESTION_TYPES = [
     'heading', 'descriptive'
@@ -112,7 +112,7 @@ export function QuestionField(
         className={
             "question-field " +
             (
-                question.type == 'calc' && question.name != CONSENT_FILE_QUESTION_FIELD_NAME ? 'is-hidden ' : ''
+                question.type == 'calc' && !CONSENT_FILE_FIELD_ALIASES.includes(question.name) ? 'is-hidden ' : ''
             )
         }
         data-question-id={question.id}
@@ -313,7 +313,7 @@ export function QuestionField(
 
                                 {/* Render Consent PDF */}
                                 {
-                                    question.type == 'calc' && question.name == CONSENT_FILE_QUESTION_FIELD_NAME &&
+                                    question.type == 'calc' && CONSENT_FILE_FIELD_ALIASES.includes(question.name) &&
                                     <>
                                         {
                                             question.downloadURL &&

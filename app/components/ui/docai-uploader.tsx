@@ -7,10 +7,11 @@ type ExtractResult = {
   extracted?: any;
 };
 
-export default function DocAIUploader() {
+export default function DocAIUploader({ onExtract }: { onExtract?: (extracted: any) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,9 +26,20 @@ export default function DocAIUploader() {
       const fd = new FormData();
       files.forEach((f) => fd.append("files", f));
       const r = await fetch("/api/docai/extract", { method: "POST", body: fd });
-      const data: ExtractResult = await r.json();
-      if (!data.ok) throw new Error(data.error || "Upload failed");
+      let data: ExtractResult | null = null;
+      try {
+        data = await r.json();
+      } catch (jsonErr) {
+        // Server returned non-JSON (HTML / text) — capture text for debugging
+        const txt = await r.text().catch(() => String(jsonErr));
+        throw new Error(`Server returned non-JSON response: ${txt}`);
+      }
+
+      if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "Upload failed");
+
       setResult(data.extracted);
+      setMessage('Report extracted and fields pre-filled. Please review and adjust if needed.');
+      try { if (onExtract) await onExtract(data.extracted); } catch {}
     } catch (e: any) {
       consoleError("DocAI upload failed:", e);
       alert(e?.message || "Upload failed");
@@ -54,10 +66,9 @@ export default function DocAIUploader() {
           <button className="btn-theme mt-3" disabled={!files.length || busy} onClick={onUpload}>
             {busy ? "Uploading…" : "Upload & Extract"}
           </button>
-          {result && (
+          {message && (
             <div className="notification is-info is-light mt-4">
-              <strong>Detected:</strong>
-              <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(result, null, 2)}</pre>
+              {message}
             </div>
           )}
         </div>

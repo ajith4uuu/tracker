@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router";
 import { QuestionField } from "~/components/ui/question-field";
-import { CONSENT_FILE_QUESTION_FIELD_NAME, END_SURVEY_CONDITIONS, LANGUAGES_AVAILABLE } from "~/constant";
+import { CONSENT_FILE_QUESTION_FIELD_NAME, CONSENT_FILE_FIELD_ALIASES, END_SURVEY_CONDITIONS, LANGUAGES_AVAILABLE } from "~/constant";
 import { BQGenerateConsentPDFForUser, BQLoadQuestionsIntoFirestore } from "~/lib/bqService";
 import {
   fetchQuestionsFromFirestore,
@@ -181,7 +181,7 @@ export default function QuestionsListPage() {
             'value': null
           }
 
-          if (question.name === CONSENT_FILE_QUESTION_FIELD_NAME) {
+          if (CONSENT_FILE_FIELD_ALIASES.includes(question.name)) {
             try {
               const [consentFileSuccess, consentFileResp] = await BQGenerateConsentPDFForUser(currentUser.uid, pastResponses);
 
@@ -219,7 +219,7 @@ export default function QuestionsListPage() {
 
             response.value = tempValue ?? null;
 
-            if (question.name === CONSENT_FILE_QUESTION_FIELD_NAME && response.downloadURL) {
+            if (CONSENT_FILE_FIELD_ALIASES.includes(question.name) && response.downloadURL) {
               question.downloadURL = response.downloadURL;
             }
           }
@@ -387,6 +387,9 @@ export default function QuestionsListPage() {
         iKey++;
       }
 
+      // Decode common HTML entities that may appear in Firestore strings
+      statement = statement.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;&amp;/g, '&&').replace(/&amp;/g, '&');
+
       try {
         consoleLog('evaluating with ctx (post-replace):', statement, ctx)
 
@@ -502,6 +505,9 @@ export default function QuestionsListPage() {
           statement = statement.split(placeholder).join(valLit);
           iKey++;
         }
+
+        // Decode HTML entities
+        statement = statement.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;&amp;/g, '&&').replace(/&amp;/g, '&');
 
         consoleLog('[END_SURVEY_CONDITIONS] evaluating (post-replace):', statement, ctx)
 
@@ -667,6 +673,25 @@ export default function QuestionsListPage() {
 
       await storeAllUserResponsesToFirestore(currentUser.uid, updatedResponses)
 
+      // If this page contains consent/signature confirmations, (re)generate consent PDF and persist its link
+      try {
+        const hasConsentStep = currPageQuestions.some((q: any) => /pt_signature|confirm|consent/i.test(String(q?.name || '')));
+        if (hasConsentStep) {
+          const [ok, payload] = await BQGenerateConsentPDFForUser(currentUser.uid, updatedResponses);
+          if (ok && payload && payload.consentFile) {
+            const consentQ = (allPagesQuestions || []).find((q: any) => CONSENT_FILE_FIELD_ALIASES.includes(q?.name));
+            if (consentQ) {
+              const downloadURL = await fetchFileDownloadURLFromGCS(payload.consentFile);
+              updatedResponses[String(consentQ.id)] = { id: consentQ.id, name: consentQ.name, value: payload.consentFile, downloadURL };
+              await storeAllUserResponsesToFirestore(currentUser.uid, updatedResponses);
+              setResponses(updatedResponses);
+            }
+          }
+        }
+      } catch (e) {
+        consoleError('Error when generating consent PDF after save:', e);
+      }
+
       resolve("Responses stored.");
     });
 
@@ -734,6 +759,145 @@ export default function QuestionsListPage() {
 
     toggleLangDropdown(!isLangDropdownActive)
   }
+
+  // Map DocAI extraction to survey fields and update responses
+  const applyDocAIExtraction = async (extracted: any) => {
+    if (!extracted || typeof extracted !== 'object') return;
+
+    const lang = settings.language || 'en';
+
+    const parseOptions = (q: any) => {
+      const str = q?.[`choices_${lang}`] || q?.[`options_${lang}`] || q?.choices || q?.options || '';
+      const out: Array<{ value: string; label: string }> = [];
+      if (typeof str !== 'string' || !str) return out;
+      if (str.includes('||')) {
+        str.split('||').map(t => t.trim()).forEach(t => { const p = t.split('|'); if (p.length > 1) out.push({ value: p[0], label: p[1] }); });
+      } else if (str.includes('|')) {
+        str.split('|').map(t => t.trim()).forEach(t => out.push({ value: t, label: t }));
+      } else if (str.includes('\n')) {
+        str.split('\n').map(t => t.trim()).forEach(t => { if (t.includes('|')) { const p = t.split('|'); if (p.length > 1) out.push({ value: p[1], label: p[0] }); } else out.push({ value: t, label: t }); });
+      }
+      return out;
+    };
+
+    const pickByIncludes = (opts: any[], ...needles: string[]) => {
+      const n = needles.map(s => s.toLowerCase());
+      return opts.find(o => n.some(s => (o.label || '').toLowerCase().includes(s) || (o.value || '').toLowerCase().includes(s)))?.value ?? null;
+    };
+
+    const next: any = { ...responses };
+    const ensureSet = (q: any, val: any) => {
+      if (!q) return;
+      if (!next[q.id]) next[q.id] = { id: q.id, name: q.name };
+      next[q.id].value = val;
+    };
+
+    const all = allPagesQuestions || [];
+    const byName = (re: RegExp) => all.find((q: any) => re.test(String(q?.name || '').toLowerCase()));
+    const byLabel = (re: RegExp) => all.find((q: any) => re.test(String(q?.[`label_${lang}`] ?? q?.label ?? '')));
+
+    // HER2 radio
+    const qHER2 = byName(/her\s*-?\s*2|her2/) || byLabel(/her\s*-?\s*2/i);
+    if (qHER2 && (extracted.HER2 || extracted.HER2Score)) {
+      const opts = parseOptions(qHER2);
+      let v: any = null;
+      if (extracted.HER2Score) {
+        const s = String(extracted.HER2Score).toLowerCase();
+        if (/3\+/.test(s)) v = pickByIncludes(opts,'3+');
+        else if (/2\+/.test(s)) v = pickByIncludes(opts,'2+');
+        else if (/1\+/.test(s)) v = pickByIncludes(opts,'+1','1+');
+        else if (/\b0\b/.test(s)) v = pickByIncludes(opts,'0');
+      }
+      if (!v && extracted.HER2) {
+        v = (/positive/i.test(extracted.HER2)) ? pickByIncludes(opts, '3+', 'positive')
+          : (/equivocal/i.test(extracted.HER2)) ? pickByIncludes(opts, '2+', 'equivocal')
+          : pickByIncludes(opts, '0', 'negative','1+');
+      }
+      if (v) ensureSet(qHER2, v);
+    }
+
+    // Ki-67 text
+    const qKi = byName(/ki\s*-?\s*67/) || byLabel(/ki\s*-?\s*67/i);
+    if (qKi && extracted.Ki67) {
+      const n = String(extracted.Ki67).replace('%', '').trim();
+      ensureSet(qKi, n);
+    }
+
+    // ER / PR
+    const qER = byName(/(^|[_-])er([_-]|$)/) || byLabel(/estrogen\s*receptor|\ber\b/i);
+    if (qER && extracted.ER) {
+      const opts = parseOptions(qER);
+      if (opts?.length) {
+        const v = /pos/i.test(extracted.ER) ? pickByIncludes(opts,'pos','positive','yes') : pickByIncludes(opts,'neg','negative','no','0%');
+        if (v) ensureSet(qER, v); else ensureSet(qER, extracted.ER);
+      } else ensureSet(qER, extracted.ER);
+    }
+    const qPR = byName(/(^|[_-])pr([_-]|$)/) || byLabel(/progesterone\s*receptor|\bpr\b/i);
+    if (qPR && extracted.PR) {
+      const opts = parseOptions(qPR);
+      if (opts?.length) {
+        const v = /pos/i.test(extracted.PR) ? pickByIncludes(opts,'pos','positive','yes') : pickByIncludes(opts,'neg','negative','no','0%');
+        if (v) ensureSet(qPR, v); else ensureSet(qPR, extracted.PR);
+      } else ensureSet(qPR, extracted.PR);
+    }
+
+    // PD-L1 percent (text)
+    const qPDL1Pct = byName(/pd\s*-?\s*l1/) || byLabel(/pd\s*-?\s*l1[^\n]*%|pd\s*-?\s*l1[^\n]*percent/i);
+    if (qPDL1Pct && extracted.PDL1Percent) ensureSet(qPDL1Pct, String(extracted.PDL1Percent).replace('%', '').trim());
+
+    // Stage at diagnosis (radio)
+    const qStage = byName(/^dx_stage$/) || byLabel(/what\s*stage.*diagnosis/i) || all.find((q:any)=>{
+      const opts = parseOptions(q)||[]; const labels = opts.map(o=>String(o.label||'').toLowerCase());
+      return labels.includes('stage 0') && labels.includes('stage i') && labels.includes('stage ii');
+    });
+    if (qStage && extracted.stage) {
+      const opts = parseOptions(qStage);
+      const val = /iv/i.test(extracted.stage) ? pickByIncludes(opts,'stage iv','iv','4')
+        : /iii/i.test(extracted.stage) ? pickByIncludes(opts,'stage iii','iii','3')
+        : /ii/i.test(extracted.stage) ? pickByIncludes(opts,'stage ii','ii','2')
+        : /i\b/i.test(extracted.stage) ? pickByIncludes(opts,'stage i',' i ','1')
+        : pickByIncludes(opts,'stage 0','dcis','0');
+      if (val) ensureSet(qStage, val);
+    }
+
+    // Date of diagnosis (date)
+    const qDx = byName(/dx[_-]?date|date[_-]?of[_-]?diagnosis|diagnosis[_-]?date|initial.*diagnosis/) || byLabel(/initial.*diagnosis|date.*diagnosis/i);
+    if (qDx && extracted.dateOfDiagnosis) {
+      const d = String(extracted.dateOfDiagnosis).replace(/\s+/g,'').replace(/\./g,'/');
+      // normalize many forms to m/d/Y
+      let out = d;
+      const m1 = /^(\d{4})[-\/]?(\d{1,2})[-\/]?(\d{1,2})$/.exec(d);
+      const m2 = /^(\d{1,2})[-\/]?(\d{1,2})[-\/]?(\d{2,4})$/.exec(d);
+      if (m1) out = `${Number(m1[2])}/${Number(m1[3])}/${m1[1]}`;
+      else if (m2) out = `${Number(m2[1])}/${Number(m2[2])}/${m2[3].length===2?('20'+m2[3]):m2[3]}`;
+      ensureSet(qDx, out);
+    }
+
+    // PIK3CA tested/result
+    const qPIK = byName(/pik3ca/) || byLabel(/pik3ca/i);
+    if (qPIK && (extracted.PIK3CA || extracted.PIK3CAStatus)) {
+      const opts = parseOptions(qPIK);
+      const status = String(extracted.PIK3CA || extracted.PIK3CAStatus).toLowerCase();
+      let v = pickByIncludes(opts, status.includes('pos')||status.includes('mutat')?'positive':'negative');
+      if (!v) v = pickByIncludes(opts, status.includes('mutat')?'yes':'no');
+      if (!v) v = pickByIncludes(opts, 'tested','not tested');
+      if (v) ensureSet(qPIK, v);
+    }
+
+    // BRCA mutation
+    const qBRCA = byName(/brca/) || byLabel(/brca/i);
+    if (qBRCA && extracted.BRCA) {
+      const opts = parseOptions(qBRCA);
+      const s = String(extracted.BRCA).toLowerCase();
+      let v = pickByIncludes(opts, /pos|mutat|detected/.test(s)?'yes':'no');
+      if (!v) v = pickByIncludes(opts, /pos|mutat|detected/.test(s)?'positive':'negative');
+      if (!v) v = pickByIncludes(opts, 'i do not know','unknown');
+      if (v) ensureSet(qBRCA, v);
+    }
+
+    setResponses(next);
+    try { await storeAllUserResponsesToFirestore(currentUser.uid, next); } catch(e) { consoleError('Failed to persist DocAI mapping:', e); }
+  };
 
   useEffect(() => {
     setPageTitle(`Page ${currentPage} of ${settings.totalPages}`);
@@ -806,6 +970,7 @@ export default function QuestionsListPage() {
                 <div className="page-content-card card">
                   <div className="card-content">
                     <div className="questions-list">
+                      {currentPage === 5 ? (<DocAIUploader key={`docai-page-${currentPage}`} onExtract={(extracted: any) => applyDocAIExtraction(extracted)} />) : null}
                       {currPageQuestions.map((question, index) => {
                         if (!isQuestionVisible(question)) {
                           return null;
@@ -815,10 +980,7 @@ export default function QuestionsListPage() {
 
                         return (
                           <div key={`${question.id ?? 'q'}-${index}`} className="question-row">
-                            {isEmailField && (
-                              <DocAIUploader key={`docai-${question.id ?? index}`} />
-                            )}
-                            <QuestionField
+                                                        <QuestionField
                               key={`qf-${question.id ?? index}`}
                               question={question}
                               value={((responses[question.id] ?? {}).value ?? null)}

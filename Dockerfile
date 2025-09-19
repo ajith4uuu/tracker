@@ -1,33 +1,38 @@
-# ---------- Base Dependencies ----------
-FROM node:20-alpine AS deps
+# -------- Base image --------
+FROM node:20-slim AS base
+ENV PORT=8080
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 
-# ---------- Builder Stage ----------
-FROM node:20-alpine AS build
-WORKDIR /app
+# -------- Dependencies (with dev deps) --------
+FROM base AS deps
 COPY package*.json ./
-RUN npm ci --ignore-scripts && npm cache clean --force
+# Install ALL deps so build tools (e.g. @react-router/dev) are available
+RUN npm ci --include=dev && npm cache clean --force
+
+# -------- Build --------
+FROM base AS build
+WORKDIR /app
+ENV NODE_ENV=development
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
+# Prune to production-only for runtime
+RUN npm prune --omit=dev && npm cache clean --force
 
-# ---------- Runtime Stage ----------
-FROM node:20-alpine
-WORKDIR /app
+# -------- Runtime --------
+FROM node:20-slim AS runner
 ENV NODE_ENV=production
 ENV PORT=8080
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/* \
+  && addgroup --system nodejs && adduser --system --ingroup nodejs nodeuser
 
-# Init + non-root user
-RUN apk add --no-cache tini
-RUN addgroup -g 1001 nodejs && adduser -D -u 1001 nodeuser -G nodejs
-
-# Copy artifacts with correct ownership
-COPY --from=deps --chown=1001:1001 /app/node_modules ./node_modules
-COPY --from=build --chown=1001:1001 /app/build ./build
-COPY --chown=1001:1001 package*.json ./
+COPY --chown=nodeuser:nodejs --from=build /app/node_modules ./node_modules
+COPY --chown=nodeuser:nodejs --from=build /app/build ./build
+COPY --chown=nodeuser:nodejs package*.json ./
 
 USER nodeuser
 EXPOSE 8080
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["react-router-serve", "./build/server/index.js"]
+ENTRYPOINT ["/usr/bin/tini","--"]
+CMD ["node","node_modules/@react-router/serve/dist/cli.js","./build/server/index.js"]
