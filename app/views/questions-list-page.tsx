@@ -787,9 +787,11 @@ export default function QuestionsListPage() {
     };
 
     const all = allPagesQuestions || [];
+    const byName = (re: RegExp) => all.find((q: any) => re.test(String(q?.name || '').toLowerCase()));
+    const byLabel = (re: RegExp) => all.find((q: any) => re.test(String(q?.[`label_${lang}`] ?? q?.label ?? '')));
 
     // HER2 radio
-    const qHER2 = all.find((q: any) => /her[-\s]?2/i.test(q?.label_en || q?.label || ''));
+    const qHER2 = byName(/her\s*-?\s*2|her2/) || byLabel(/her\s*-?\s*2/i);
     if (qHER2 && (extracted.HER2 || extracted.HER2Score)) {
       const opts = parseOptions(qHER2);
       let v: any = null;
@@ -809,56 +811,82 @@ export default function QuestionsListPage() {
     }
 
     // Ki-67 text
-    const qKi = all.find((q: any) => /ki[-\s]?67/i.test(q?.label_en || q?.label || ''));
+    const qKi = byName(/ki\s*-?\s*67/) || byLabel(/ki\s*-?\s*67/i);
     if (qKi && extracted.Ki67) {
       const n = String(extracted.Ki67).replace('%', '').trim();
       ensureSet(qKi, n);
     }
 
     // ER / PR
-    const qER = all.find((q:any)=>/estrogen\s*receptor|\ber\b/i.test(q?.label_en || q?.label || ''));
+    const qER = byName(/(^|[_-])er([_-]|$)/) || byLabel(/estrogen\s*receptor|\ber\b/i);
     if (qER && extracted.ER) {
       const opts = parseOptions(qER);
       if (opts?.length) {
-        const v = /pos/i.test(extracted.ER) ? pickByIncludes(opts,'pos','positive') : pickByIncludes(opts,'neg','negative','0%');
+        const v = /pos/i.test(extracted.ER) ? pickByIncludes(opts,'pos','positive','yes') : pickByIncludes(opts,'neg','negative','no','0%');
         if (v) ensureSet(qER, v); else ensureSet(qER, extracted.ER);
       } else ensureSet(qER, extracted.ER);
     }
-    const qPR = all.find((q:any)=>/progesterone\s*receptor|\bpr\b/i.test(q?.label_en || q?.label || ''));
+    const qPR = byName(/(^|[_-])pr([_-]|$)/) || byLabel(/progesterone\s*receptor|\bpr\b/i);
     if (qPR && extracted.PR) {
       const opts = parseOptions(qPR);
       if (opts?.length) {
-        const v = /pos/i.test(extracted.PR) ? pickByIncludes(opts,'pos','positive') : pickByIncludes(opts,'neg','negative','0%');
+        const v = /pos/i.test(extracted.PR) ? pickByIncludes(opts,'pos','positive','yes') : pickByIncludes(opts,'neg','negative','no','0%');
         if (v) ensureSet(qPR, v); else ensureSet(qPR, extracted.PR);
       } else ensureSet(qPR, extracted.PR);
     }
 
     // PD-L1 percent (text)
-    const qPDL1Pct = all.find((q: any) => /pd[-\s]?l1[^\n]*%|pd[-\s]?l1[^\n]*percent/i.test((q?.label_en || q?.label || '')));
+    const qPDL1Pct = byName(/pd\s*-?\s*l1/) || byLabel(/pd\s*-?\s*l1[^\n]*%|pd\s*-?\s*l1[^\n]*percent/i);
     if (qPDL1Pct && extracted.PDL1Percent) ensureSet(qPDL1Pct, String(extracted.PDL1Percent).replace('%', '').trim());
 
     // Stage at diagnosis (radio)
-    const qStage = all.find((q:any)=>/what\s*stage.*diagnosis/i.test(q?.label_en || q?.label || '')) || all.find((q:any)=>{
+    const qStage = byName(/^dx_stage$/) || byLabel(/what\s*stage.*diagnosis/i) || all.find((q:any)=>{
       const opts = parseOptions(q)||[]; const labels = opts.map(o=>String(o.label||'').toLowerCase());
       return labels.includes('stage 0') && labels.includes('stage i') && labels.includes('stage ii');
     });
     if (qStage && extracted.stage) {
       const opts = parseOptions(qStage);
-      const val = /iv/i.test(extracted.stage) ? pickByIncludes(opts,'stage iv')
-        : /iii/i.test(extracted.stage) ? pickByIncludes(opts,'stage iii')
-        : /ii/i.test(extracted.stage) ? pickByIncludes(opts,'stage ii')
-        : /i\b/i.test(extracted.stage) ? pickByIncludes(opts,'stage i')
-        : pickByIncludes(opts,'stage 0','dcis');
+      const val = /iv/i.test(extracted.stage) ? pickByIncludes(opts,'stage iv','iv','4')
+        : /iii/i.test(extracted.stage) ? pickByIncludes(opts,'stage iii','iii','3')
+        : /ii/i.test(extracted.stage) ? pickByIncludes(opts,'stage ii','ii','2')
+        : /i\b/i.test(extracted.stage) ? pickByIncludes(opts,'stage i',' i ','1')
+        : pickByIncludes(opts,'stage 0','dcis','0');
       if (val) ensureSet(qStage, val);
     }
 
     // Date of diagnosis (date)
-    const qDx = all.find((q: any) => /initial.*diagnosis|date.*diagnosis/i.test(q?.label_en || q?.label || ''));
+    const qDx = byName(/dx[_-]?date|date[_-]?of[_-]?diagnosis|diagnosis[_-]?date|initial.*diagnosis/) || byLabel(/initial.*diagnosis|date.*diagnosis/i);
     if (qDx && extracted.dateOfDiagnosis) {
-      const d = String(extracted.dateOfDiagnosis);
-      const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(d);
-      const out = m ? `${Number(m[2])}/${Number(m[3])}/${m[1]}` : d; // m/d/Y
+      const d = String(extracted.dateOfDiagnosis).replace(/\s+/g,'').replace(/\./g,'/');
+      // normalize many forms to m/d/Y
+      let out = d;
+      const m1 = /^(\d{4})[-\/]?(\d{1,2})[-\/]?(\d{1,2})$/.exec(d);
+      const m2 = /^(\d{1,2})[-\/]?(\d{1,2})[-\/]?(\d{2,4})$/.exec(d);
+      if (m1) out = `${Number(m1[2])}/${Number(m1[3])}/${m1[1]}`;
+      else if (m2) out = `${Number(m2[1])}/${Number(m2[2])}/${m2[3].length===2?('20'+m2[3]):m2[3]}`;
       ensureSet(qDx, out);
+    }
+
+    // PIK3CA tested/result
+    const qPIK = byName(/pik3ca/) || byLabel(/pik3ca/i);
+    if (qPIK && (extracted.PIK3CA || extracted.PIK3CAStatus)) {
+      const opts = parseOptions(qPIK);
+      const status = String(extracted.PIK3CA || extracted.PIK3CAStatus).toLowerCase();
+      let v = pickByIncludes(opts, status.includes('pos')||status.includes('mutat')?'positive':'negative');
+      if (!v) v = pickByIncludes(opts, status.includes('mutat')?'yes':'no');
+      if (!v) v = pickByIncludes(opts, 'tested','not tested');
+      if (v) ensureSet(qPIK, v);
+    }
+
+    // BRCA mutation
+    const qBRCA = byName(/brca/) || byLabel(/brca/i);
+    if (qBRCA && extracted.BRCA) {
+      const opts = parseOptions(qBRCA);
+      const s = String(extracted.BRCA).toLowerCase();
+      let v = pickByIncludes(opts, /pos|mutat|detected/.test(s)?'yes':'no');
+      if (!v) v = pickByIncludes(opts, /pos|mutat|detected/.test(s)?'positive':'negative');
+      if (!v) v = pickByIncludes(opts, 'i do not know','unknown');
+      if (v) ensureSet(qBRCA, v);
     }
 
     setResponses(next);
