@@ -10,21 +10,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     let form;
     try {
-      form = await request.formData();
+      // Prefer reading from a clone first (some runtimes allow clone even if original not readable)
+      try {
+        const cloned = request.clone();
+        form = await cloned.formData();
+      } catch (cloneErr) {
+        // Fallback to reading directly
+        form = await request.formData();
+      }
     } catch (e: any) {
-      // Common runtime when body was consumed already
+      // If both attempts fail, return a clear JSON error
       const msg = e?.message || String(e);
       if (/already read|body/.test(msg)) {
-        // Try cloning the request and read from clone as a fallback
-        try {
-          const cloned = request.clone();
-          form = await cloned.formData();
-        } catch (e2: any) {
-          return json({ ok: false, error: 'Request body already read and cannot be cloned' }, 400);
-        }
-      } else {
-        throw e;
+        return json({ ok: false, error: 'Request body already read and cannot be parsed; please re-try upload' }, 400);
       }
+      return json({ ok: false, error: 'Failed to parse multipart form data: ' + msg }, 400);
     }
 
     const files = form.getAll("files").filter(Boolean) as File[];
