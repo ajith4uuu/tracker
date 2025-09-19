@@ -387,6 +387,9 @@ export default function QuestionsListPage() {
         iKey++;
       }
 
+      // Decode common HTML entities that may appear in Firestore strings
+      statement = statement.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;&amp;/g, '&&').replace(/&amp;/g, '&');
+
       try {
         consoleLog('evaluating with ctx (post-replace):', statement, ctx)
 
@@ -502,6 +505,9 @@ export default function QuestionsListPage() {
           statement = statement.split(placeholder).join(valLit);
           iKey++;
         }
+
+        // Decode HTML entities
+        statement = statement.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;&amp;/g, '&&').replace(/&amp;/g, '&');
 
         consoleLog('[END_SURVEY_CONDITIONS] evaluating (post-replace):', statement, ctx)
 
