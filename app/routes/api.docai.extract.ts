@@ -82,6 +82,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const text = (result.document?.text || "").replace(/\u0000/g, " ");
         const parsed = extractFromText(text);
         for (const [k, v] of Object.entries(parsed)) if (!(k in aggregated) && v) (aggregated as any)[k] = v;
+
+        // Optional Gemini-based stage inference if not already detected
+        if (!aggregated.stage) {
+          try {
+            const aiStage = await inferStageWithGemini(text);
+            if (aiStage) (aggregated as any).stage = aiStage;
+          } catch {}
+        }
+
         if (process.env.NODE_ENV !== "production" && text && !aggregated.text) aggregated.text = text;
       } catch (err: any) {
         aggregated.lastError = err?.message || String(err);
@@ -105,49 +114,49 @@ function normalize(s: string) {
 function extractFromText(text: string): Record<string, string> {
   const t = normalize(text);
   const out: Record<string, string> = {};
-  const er = /(estrogen receptor|récepteur des œstrogènes|er)\b[^\n]*?(positive|negative|positif|négatif|pos|neg|0%|[1-9]\d?%)/i.exec(t);
-  const pr = /(progesterone receptor|récepteur de progestérone|pr)\b[^\n]*?(positive|negative|positif|négatif|pos|neg|0%|[1-9]\d?%)/i.exec(t);
+
+  // ER / PR with protection against matching HER2
+  const er = /(estrogen receptor|récepteur des œstrogènes)\b[^\n]*?(positive|negative|positif|négatif|pos|neg|0%|[1-9]\d?%)/i.exec(t)
+    || /(?<![a-z])er(?![a-z0-9])\b[^\n]*?(positive|negative|positif|négatif|pos|neg|0%|[1-9]\d?%)/i.exec(t);
+  const pr = /(progesterone receptor|récepteur de progestérone)\b[^\n]*?(positive|negative|positif|négatif|pos|neg|0%|[1-9]\d?%)/i.exec(t)
+    || /(?<![a-z])pr(?![a-z0-9])\b[^\n]*?(positive|negative|positif|négatif|pos|neg|0%|[1-9]\d?%)/i.exec(t);
   if (er || pr) {
     const erNeg = er ? /negative|négatif|neg|0%/i.test(er[0]) : false;
     const prNeg = pr ? /negative|négatif|neg|0%/i.test(pr[0]) : false;
-    const erStr = er ? (erNeg ? "ER-" : "ER+") : "";
-    const prStr = pr ? (prNeg ? "PR-" : "PR+") : "";
-    out.ERPR = `${erStr}${erStr && prStr ? "/" : ""}${prStr}`.trim();
-    if (er) out.ER = erNeg ? "Negative" : "Positive";
-    if (pr) out.PR = prNeg ? "Negative" : "Positive";
+    const erStr = er ? (erNeg ? 'ER-' : 'ER+') : '';
+    const prStr = pr ? (prNeg ? 'PR-' : 'PR+') : '';
+    out.ERPR = `${erStr}${erStr && prStr ? '/' : ''}${prStr}`.trim();
+    if (er) out.ER = erNeg ? 'Negative' : 'Positive';
+    if (pr) out.PR = prNeg ? 'Negative' : 'Positive';
   }
+
   // HER2: capture status and exact score (0/1+/2+/3+)
   let her2 = /(her[- ]?2|her2\/neu)\b[^\n]*?(positive|negative|equivocal|positif|négatif|équivoque|pos|neg|0|1\+|2\+|3\+)/i.exec(t);
-  // Patterns like: "HER-2 neu score: NEGATIVE (0 staining)"
   const her2Line = /her[- ]?2[^\n]*?(?:score|result)?[^\n]*?/i.exec(t);
-  const her2ScoreInParens = /\((\s*[0-3](?:\s*\+)?\s*stain(?:ing)?\s*)\)/i.exec(her2Line ? her2Line[0] : "");
+  const her2ScoreInParens = /\((\s*[0-3](?:\s*\+)?\s*stain(?:ing)?\s*)\)/i.exec(her2Line ? her2Line[0] : '');
   const her2Explicit = /her[- ]?2[^\n]*?(positive|negative|equivocal)[^\n]*?(0|1\+|2\+|3\+)?/i.exec(t);
 
   let her2Score: string | null = null;
   let her2Status: string | null = null;
-
   if (her2ScoreInParens) {
     const s = her2ScoreInParens[1].toLowerCase();
-    if (/3\+/.test(s)) her2Score = '3+'; else if (/2\+/.test(s)) her2Score = '2+'; else if (/1\+/.test(s)) her2Score = '1+'; else if(/\b0\b/.test(s)) her2Score = '0';
+    if (/3\+/.test(s)) her2Score = '3+'; else if (/2\+/.test(s)) her2Score = '2+'; else if (/1\+/.test(s)) her2Score = '1+'; else if (/\b0\b/.test(s)) her2Score = '0';
   }
   if (her2Explicit) {
     const stat = her2Explicit[1].toLowerCase();
     if (/positif|positive|pos/.test(stat)) her2Status = 'Positive';
     else if (/equivocal|équivoque/.test(stat)) her2Status = 'Equivocal';
     else if (/négatif|negative|neg/.test(stat)) her2Status = 'Negative';
-    if (!her2Score && her2Explicit[2]) her2Score = her2Explicit[2].replace(/\s+/g,'');
+    if (!her2Score && her2Explicit[2]) her2Score = her2Explicit[2].replace(/\s+/g, '');
   }
-  if (!her2Status && her2) {
-    her2Status = /3\+|positive|positif|pos/i.test(her2[0]) ? 'Positive' : /2\+|equivocal|équivoque/i.test(her2[0]) ? 'Equivocal' : 'Negative';
-  }
-  if (!her2Score && her2) {
-    her2Score = /3\+/.test(her2[0]) ? '3+' : /2\+/.test(her2[0]) ? '2+' : /1\+/.test(her2[0]) ? '1+' : /\b0\b/.test(her2[0]) ? '0' : null;
-  }
+  if (!her2Status && her2) her2Status = /3\+|positive|positif|pos/i.test(her2[0]) ? 'Positive' : /2\+|equivocal|équivoque/i.test(her2[0]) ? 'Equivocal' : 'Negative';
+  if (!her2Score && her2) her2Score = /3\+/.test(her2[0]) ? '3+' : /2\+/.test(her2[0]) ? '2+' : /1\+/.test(her2[0]) ? '1+' : /\b0\b/.test(her2[0]) ? '0' : null;
   if (her2Status) out.HER2 = her2Status;
   if (her2Score) out.HER2Score = her2Score;
+
   const ki = /(ki[- ]?67)[^\n]*?(\d{1,3})\s*%/i.exec(t); if (ki) out.Ki67 = `${ki[2]}%`;
   const pdl1 = /(pd[- ]?l1)[^\n]*?(positive|negative|positif|négatif|\d{1,3}\s*%)/i.exec(t); if (pdl1) out.PDL1 = pdl1[0].trim();
-  const pdl1Pct = /(pd[- ]?l1)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t) || /(ihc score|score ihc)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t); if (pdl1Pct) out.PDL1Percent = `${pdl1Pct[2]}%${pdl1Pct[3] ? " " + pdl1Pct[3].toUpperCase() : ""}`;
+  const pdl1Pct = /(pd[- ]?l1)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t) || /(ihc score|score ihc)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t); if (pdl1Pct) out.PDL1Percent = `${pdl1Pct[2]}%${pdl1Pct[3] ? ' ' + pdl1Pct[3].toUpperCase() : ''}`;
   const msi = /(microsatellite\s*instability|instabilité microsatellitaire|msi)[^\n]*?(high|stable|low|élevée|stable|faible)/i.exec(t); if (msi) out.MSI = msi[0].trim();
 
   // PIK3CA
@@ -167,22 +176,64 @@ function extractFromText(text: string): Record<string, string> {
     else if (/wild[- ]?type|not detected|negative/.test(stat)) out.BRCA = 'Negative';
   }
 
+  // Stage heuristics
   const st = /\b(?:dcis|stage\s*(0|i{1,3}|iv)|stade\s*(0|i{1,3}|iv))\b/i.exec(t);
-  if (st) out.stage = /dcis/i.test(st[0]) ? "DCIS / Stage 0" : `Stage ${(st[1] || st[2] || "").toUpperCase()}`;
-  if (/metastatic|metastasis|distant metastases|métastatique|métastases/i.test(t) && !out.stage) out.stage = "Stage IV";
+  if (st) out.stage = /dcis/i.test(st[0]) ? 'DCIS / Stage 0' : `Stage ${(st[1] || st[2] || '').toUpperCase()}`;
+  if (/metastatic|metastasis|distant metastases|métastatique|métastases/i.test(t) && !out.stage) out.stage = 'Stage IV';
   const mets = /\b(liver|foie|lung|poumon|bone|os|brain|cerveau|adrenal|surr[ée]nale|ovary|ovaire|kidney|rein|pleura|pl[eé]vre|spleen|rate|pancreas|pancr[eé]as|peritoneum|p[eé]ritoine)\b/gi;
   const foundMets = Array.from(t.matchAll(mets)).map((m) => m[0].toLowerCase());
-  if (foundMets.length) out.metastasisSites = [...new Set(foundMets)].join(", ");
+  if (foundMets.length) out.metastasisSites = [...new Set(foundMets)].join(', ');
   const otherMets = /(?:autres sites de m[ée]tastases|autres sites de métastases)[:\s-]*([^\n]+)/i.exec(t) || /other\s*metastatic\s*sites[:\s-]*([^\n]+)/i.exec(t);
   if (otherMets) out.otherMetastasis = otherMets[1].trim();
   const accession = /accession\s*#?\s*[:\-]?\s*([a-z]\d+[a-z0-9\-]*)/i.exec(t) || /patient id\/case number\s*[:\-]?\s*([a-z0-9\-]+)/i.exec(t);
   if (accession) out.accession = accession[1];
-  const diagDate = /(date\s*(of\s*)?(report|diagnosis)|date\s*du\s*rapport|date\s*de\s*diagnostic)[^\n]*?(\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b|\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b)/i.exec(t);
-  if (diagDate) out.dateOfDiagnosis = diagDate[4];
-  const surgDate = /(date\s*of\s*surgery|surgical\s*date|date\s*de\s*(vos\s*)?interventions\s*chirurgicales)[^\n]*?(\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b|\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b)/i.exec(t);
-  if (surgDate) out.dateOfSurgery = surgDate[2];
+
+  // Prefer "Report Date" over others; allow date to appear on next line
+  const dateToken = /(\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b|\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b)/;
+  function labeledDate(regexes: RegExp[]): string | null {
+    for (const r of regexes) {
+      const m = new RegExp(r.source + "[\n\r\t :\-]*[\s\S]{0,50}?" + dateToken.source, 'i').exec(t);
+      if (m) {
+        const d = new RegExp(dateToken.source, 'i').exec(m[0]);
+        if (d) return d[0];
+      }
+    }
+    return null;
+  }
+  const reportDate = labeledDate([/\breport\s*date\b/, /\bdate\s*(?:of\s*)?report\b/, /\bdate\s*du\s*rapport\b/]);
+  const diagnosisDate = labeledDate([/\bdate\s*(?:of\s*)?diagnosis\b/, /\bdate\s*de\s*diagnostic\b/]);
+  if (reportDate) out.dateOfDiagnosis = reportDate; else if (diagnosisDate) out.dateOfDiagnosis = diagnosisDate;
+
+  // Fallback: pick a date, but ignore collection/received lines
   if (!out.dateOfDiagnosis) {
-    const dateRx = /(\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b|\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b)/g; const dates = t.match(dateRx); if (dates?.length) out.dateOfDiagnosis = dates[0];
+    const lines = t.split('\n');
+    for (const line of lines) {
+      if (/received|collection|collected|sample|specimen/i.test(line)) continue;
+      const d = dateToken.exec(line);
+      if (d) { out.dateOfDiagnosis = d[0]; break; }
+    }
   }
   return out;
+}
+
+async function inferStageWithGemini(text: string): Promise<string | null> {
+  try {
+    const key = process.env.GEMINI_API_KEY || '';
+    if (!key) return null;
+    const prompt = `From the pathology report below, infer the breast cancer stage at initial diagnosis if explicitly derivable. Return only one of: "Stage 0", "Stage I", "Stage II", "Stage III", "Stage IV", or "Unknown". Use TNM clues (tumor size, nodes, metastasis). If not defensible, return "Unknown".\nReport:\n---\n${text}\n---`;
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0 } })
+    });
+    const json: any = await resp.json().catch(() => null);
+    const out = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const m = /(stage\s*(0|i{1,3}|iv))/i.exec(out);
+    if (m) {
+      const r = (m[2] || '').toUpperCase();
+      return r === '0' ? 'Stage 0' : `Stage ${r}`;
+    }
+    return /unknown/i.test(out) ? 'Unknown' : null;
+  } catch {
+    return null;
+  }
 }
