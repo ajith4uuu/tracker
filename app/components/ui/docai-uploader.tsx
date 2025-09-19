@@ -26,8 +26,17 @@ export default function DocAIUploader({ onExtract }: { onExtract?: (extracted: a
       const fd = new FormData();
       files.forEach((f) => fd.append("files", f));
       const r = await fetch("/api/docai/extract", { method: "POST", body: fd });
-      const data: ExtractResult = await r.json();
-      if (!data.ok) throw new Error(data.error || "Upload failed");
+      let data: ExtractResult | null = null;
+      try {
+        data = await r.json();
+      } catch (jsonErr) {
+        // Server returned non-JSON (HTML / text) — capture text for debugging
+        const txt = await r.text().catch(() => String(jsonErr));
+        throw new Error(`Server returned non-JSON response: ${txt}`);
+      }
+
+      if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "Upload failed");
+
       setResult(data.extracted);
       setMessage('Report extracted and fields pre-filled. Please review and adjust if needed.');
       try { if (onExtract) await onExtract(data.extracted); } catch {}
