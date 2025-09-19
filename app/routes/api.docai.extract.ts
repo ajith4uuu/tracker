@@ -149,6 +149,24 @@ function extractFromText(text: string): Record<string, string> {
   const pdl1 = /(pd[- ]?l1)[^\n]*?(positive|negative|positif|négatif|\d{1,3}\s*%)/i.exec(t); if (pdl1) out.PDL1 = pdl1[0].trim();
   const pdl1Pct = /(pd[- ]?l1)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t) || /(ihc score|score ihc)[^\n]*?(\d{1,3})\s*%\s*(immune|ic|tumor|tc)?/i.exec(t); if (pdl1Pct) out.PDL1Percent = `${pdl1Pct[2]}%${pdl1Pct[3] ? " " + pdl1Pct[3].toUpperCase() : ""}`;
   const msi = /(microsatellite\s*instability|instabilité microsatellitaire|msi)[^\n]*?(high|stable|low|élevée|stable|faible)/i.exec(t); if (msi) out.MSI = msi[0].trim();
+
+  // PIK3CA
+  const pik = /(pik3ca)[^\n]*?(mutation|mutated|wild[- ]?type|not detected|negative|positive)/i.exec(t);
+  if (pik) {
+    const stat = pik[2].toLowerCase();
+    if (/mutation|mutated|positive/.test(stat)) out.PIK3CA = 'Positive';
+    else if (/wild[- ]?type|not detected|negative/.test(stat)) out.PIK3CA = 'Negative';
+    out.PIK3CAStatus = out.PIK3CA;
+  }
+
+  // BRCA
+  const brca = /(brca\s*(1|2)?)[^\n]*?(mutation|mutated|variant|wild[- ]?type|not detected|negative|positive)/i.exec(t);
+  if (brca) {
+    const stat = brca[3].toLowerCase();
+    if (/mutation|mutated|positive|variant/.test(stat)) out.BRCA = 'Positive';
+    else if (/wild[- ]?type|not detected|negative/.test(stat)) out.BRCA = 'Negative';
+  }
+
   const st = /\b(?:dcis|stage\s*(0|i{1,3}|iv)|stade\s*(0|i{1,3}|iv))\b/i.exec(t);
   if (st) out.stage = /dcis/i.test(st[0]) ? "DCIS / Stage 0" : `Stage ${(st[1] || st[2] || "").toUpperCase()}`;
   if (/metastatic|metastasis|distant metastases|métastatique|métastases/i.test(t) && !out.stage) out.stage = "Stage IV";
