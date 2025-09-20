@@ -1,4 +1,3 @@
-import axios from 'axios';
 import axios, { type ResponseType as AxiosResponseType } from 'axios';
 import { getFirestoreBatch, getFirestoreDoc, questionsCollectionID, sanitizeObj, settingsCollectionID, settingsDocID } from './firestoreService';
 import { consoleError, consoleLog } from './utils';
